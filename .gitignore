@@ -3,6 +3,7 @@
 # User specified
 Backup/
 Build/
+Temp/
 .vs/
 
 # Unity
