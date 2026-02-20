@@ -1,0 +1,6 @@
+﻿<Solution>
+  <Project Path="Live2D.Cubism.csproj" />
+  <Project Path="Assembly-CSharp.csproj" />
+  <Project Path="Live2D.Cubism.Editor.csproj" />
+  <Project Path="Assembly-CSharp-Editor.csproj" />
+</Solution>

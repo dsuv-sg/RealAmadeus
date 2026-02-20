@@ -1,0 +1,23 @@
+{
+	"Version": 3,
+	"FileReferences": {
+		"Moc": "Live2D紅莉栖forSDK5.0.moc3",
+		"Textures": [
+			"Live2D紅莉栖forSDK5.0.8192/texture_00.png"
+		],
+		"Physics": "Live2D紅莉栖forSDK5.0.physics3.json",
+		"DisplayInfo": "Live2D紅莉栖forSDK5.0.cdi3.json"
+	},
+	"Groups": [
+		{
+			"Target": "Parameter",
+			"Name": "EyeBlink",
+			"Ids": []
+		},
+		{
+			"Target": "Parameter",
+			"Name": "LipSync",
+			"Ids": []
+		}
+	]
+}
