@@ -7,12 +7,14 @@ NitroPlusの二次創作ガイドライン
 https://www.nitroplus.co.jp/company/license/fan-fiction/
 
 に基づいて、非営利での開発を行っています。
+
 よって、DSUVもしくはElveltが利用者に対して金銭等の支払いを要求しないことをここに明記します。
 
 This is the Real Amadeus repository.
 We would appreciate it if you could send us requests for bug fixes/feature additions via Issues or DM.
 
 This project is a fan fiction project based on Steins;Gate 0.
+
 It is being developed non-profitably in accordance with NitroPlus' fan fiction guidelines.
 
 https://www.nitroplus.co.jp/company/license/fan-fiction/
