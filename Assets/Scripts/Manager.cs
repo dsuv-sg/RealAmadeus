@@ -12,6 +12,8 @@ public class Manager : MonoBehaviour
     public GameObject loadingPanel;
     public GameObject mainPanel;
 
+    private const string PREF_OPERATOR_NAME = "Config_OperatorName";
+
     // Start is called once before the first execution of Update after the MonoBehaviour is created
     void Start()
     {
@@ -32,9 +34,15 @@ public class Manager : MonoBehaviour
         if (loginIdInputField.text == loginId && passwordInputField.text == password)
         {
             Debug.Log("Login Successful");
+
+            // Save operator name from login input
+            string operatorName = loginIdInputField.text;
+            PlayerPrefs.SetString(PREF_OPERATOR_NAME, operatorName);
+            PlayerPrefs.Save();
+            UpdateOperatorDisplay(operatorName);
+
             loadingPanel.SetActive(true);
             loginPanel.SetActive(false);
-
         }
         else
         {
@@ -46,6 +54,12 @@ public class Manager : MonoBehaviour
     public void Logout()
     {
         Debug.Log("Logging out...");
+
+        // Clear operator name
+        PlayerPrefs.DeleteKey(PREF_OPERATOR_NAME);
+        PlayerPrefs.Save();
+        UpdateOperatorDisplay("---");
+
         if (mainPanel != null) mainPanel.SetActive(false);
         if (loadingPanel != null) loadingPanel.SetActive(false); // Ensure loading is off
         
@@ -55,6 +69,36 @@ public class Manager : MonoBehaviour
             // Clear inputs
             if (loginIdInputField != null) loginIdInputField.text = "";
             if (passwordInputField != null) passwordInputField.text = "";
+        }
+    }
+
+    /// <summary>
+    /// Updates the Row_OPERATOR value text in StatusPanel.
+    /// </summary>
+    private void UpdateOperatorDisplay(string name)
+    {
+        // Find Row_OPERATOR value text (second Text child with positive localPosition.x)
+        Transform row = null;
+        var canvas = GameObject.Find("Canvas");
+        if (canvas != null)
+        {
+            row = canvas.transform.Find("StatusPanel/InfoGrid/LeftCol/Row_OPERATOR");
+        }
+
+        if (row != null)
+        {
+            foreach (Transform child in row)
+            {
+                if (child.name == "Text" && child.localPosition.x > 0)
+                {
+                    var tmp = child.GetComponent<TextMeshProUGUI>();
+                    if (tmp != null)
+                    {
+                        tmp.text = name;
+                    }
+                    break;
+                }
+            }
         }
     }
 }

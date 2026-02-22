@@ -26,6 +26,7 @@ public class BackLogController : MonoBehaviour
 
 
     private Coroutine currentFadeCoroutine; // [NEW]
+    private bool needsScrollToBottom = false;
 
     public bool IsActive => backLogPanel != null && backLogPanel.activeSelf;
 
@@ -74,6 +75,10 @@ public class BackLogController : MonoBehaviour
             backLogPanel.SetActive(true);
             if (currentFadeCoroutine != null) StopCoroutine(currentFadeCoroutine);
             currentFadeCoroutine = StartCoroutine(FadeCanvas(0f, 1f));
+            // Rebuild layout and scroll (handles deferred entries added while inactive)
+            if (contentContainer != null)
+                LayoutRebuilder.ForceRebuildLayoutImmediate(contentContainer as RectTransform);
+            needsScrollToBottom = false;
             StartCoroutine(ScrollToBottom());
         }
     }
@@ -120,97 +125,107 @@ public class BackLogController : MonoBehaviour
 
     /// <summary>
     /// Adds a new entry to the backlog.
+    /// Creates a simple text item programmatically for reliable layout.
     /// </summary>
     public void AddLog(string role, string message)
     {
-        if (contentContainer == null || logItemPrefab == null) return;
+        if (contentContainer == null) return;
+        if (string.IsNullOrWhiteSpace(message)) return;
 
-        GameObject item = Instantiate(logItemPrefab, contentContainer);
-        
-        // Try to find specific "NameText" and "MessageText" components first
-        TextMeshProUGUI nameText = null;
-        TextMeshProUGUI messageText = null;
-        
-        // Search in children by name
-        foreach (var t in item.GetComponentsInChildren<TextMeshProUGUI>())
+        // Strip emotion tags like [HAPPY], [ANGRY] etc from message
+        string cleanMessage = message.Trim();
+        if (cleanMessage.StartsWith("["))
         {
-            if (t.name == "NameText") nameText = t;
-            else if (t.name == "MessageText") messageText = t;
-        }
-
-        // Fallback: If no specifc named components, assume single text or first two
-        if (nameText == null && messageText == null)
-        {
-            var texts = item.GetComponentsInChildren<TextMeshProUGUI>();
-            if (texts.Length >= 2) 
+            int closeBracket = cleanMessage.IndexOf(']');
+            if (closeBracket > 0)
             {
-                nameText = texts[0];
-                messageText = texts[1];
-            }
-            else if (texts.Length == 1)
-            {
-                // Single text mode (legacy)
-                messageText = texts[0]; 
+                cleanMessage = cleanMessage.Substring(closeBracket + 1).Trim();
             }
         }
+        if (string.IsNullOrWhiteSpace(cleanMessage)) return;
 
-        string namePrefix = "";
-        Color nameColor = Color.white;
-        string cleanMessage = message;
-
+        // Determine display info
+        string namePrefix;
+        Color nameColor;
         switch (role.ToLower())
         {
-            case "user":
-            case "me":
-                namePrefix = "あなた"; 
-                nameColor = userColor;
-                break;
-            case "assistant":
-            case "kurisu":
-            case "amadeus":
-                namePrefix = "紅莉栖"; 
-                nameColor = aiColor;
-                break;
+            case "user": case "me":
+                namePrefix = "あなた"; nameColor = userColor; break;
+            case "assistant": case "kurisu": case "amadeus":
+                namePrefix = "紅莉栖"; nameColor = aiColor; break;
             case "system":
-                namePrefix = "SYSTEM";
-                nameColor = systemColor;
-                break;
+                namePrefix = "SYSTEM"; nameColor = systemColor; break;
             default:
-                namePrefix = role.ToUpper();
-                nameColor = Color.gray;
-                break;
+                namePrefix = role.ToUpper(); nameColor = Color.gray; break;
         }
 
-        // ─── Dual Text Mode ───
-        if (nameText != null && messageText != null)
+        // Create item from scratch for reliable layout
+        GameObject item = new GameObject("LogEntry", typeof(RectTransform), typeof(CanvasRenderer));
+        item.transform.SetParent(contentContainer, false);
+
+        // RectTransform: stretch horizontally, auto height
+        RectTransform rt = item.GetComponent<RectTransform>();
+        rt.anchorMin = new Vector2(0, 0);
+        rt.anchorMax = new Vector2(1, 0);
+        rt.pivot = new Vector2(0.5f, 0);
+        rt.sizeDelta = new Vector2(0, 0);
+
+        // Background image (subtle)
+        var bg = item.AddComponent<Image>();
+        bg.color = new Color(1f, 1f, 1f, 0f);
+
+        // ContentSizeFitter to auto-size height based on text
+        var csf = item.AddComponent<ContentSizeFitter>();
+        csf.horizontalFit = ContentSizeFitter.FitMode.Unconstrained;
+        csf.verticalFit = ContentSizeFitter.FitMode.PreferredSize;
+
+        // Single TMP text with rich text for name coloring
+        var textObj = new GameObject("Text", typeof(RectTransform), typeof(CanvasRenderer));
+        textObj.transform.SetParent(item.transform, false);
+
+        RectTransform textRT = textObj.GetComponent<RectTransform>();
+        textRT.anchorMin = Vector2.zero;
+        textRT.anchorMax = Vector2.one;
+        textRT.offsetMin = new Vector2(20, 5);
+        textRT.offsetMax = new Vector2(-20, -5);
+
+        var tmp = textObj.AddComponent<TextMeshProUGUI>();
+        string hexColor = ColorUtility.ToHtmlStringRGB(nameColor);
+        tmp.text = $"<color=#{hexColor}><b>{namePrefix}</b></color>　{cleanMessage}";
+        tmp.fontSize = 26;
+        tmp.color = Color.white;
+        tmp.enableWordWrapping = true;
+        tmp.overflowMode = TextOverflowModes.Overflow;
+        tmp.raycastTarget = false;
+
+        // Try to use the same font as the prefab
+        if (logItemPrefab != null)
         {
-             Debug.Log($"[BackLog] Setting Dual Text -> Name: {namePrefix}, Msg: {cleanMessage}"); // DEBUG
-            nameText.text = namePrefix;
-            nameText.color = nameColor;
-            messageText.text = cleanMessage; // Ensure not empty
+            var prefabTMP = logItemPrefab.GetComponentInChildren<TextMeshProUGUI>();
+            if (prefabTMP != null && prefabTMP.font != null)
+            {
+                tmp.font = prefabTMP.font;
+                tmp.fontSharedMaterial = prefabTMP.fontSharedMaterial;
+            }
         }
-        // ─── Single Text Mode ───
-        else if (messageText != null)
+
+        // LayoutElement for proper height reporting
+        var le = item.AddComponent<LayoutElement>();
+        le.minHeight = 40f;
+        le.flexibleWidth = 1f;
+
+        item.transform.localScale = Vector3.one;
+
+        // Auto-scroll to bottom (only if panel is active, otherwise Show() will handle it)
+        if (backLogPanel != null && backLogPanel.activeInHierarchy)
         {
-            Debug.Log($"[BackLog] Setting Single Text -> {namePrefix}: {cleanMessage}"); // DEBUG
-            string colorHex = ColorUtility.ToHtmlStringRGB(nameColor);
-            messageText.text = $"<color=#{colorHex}>{namePrefix}:</color> {cleanMessage}";
+            LayoutRebuilder.ForceRebuildLayoutImmediate(contentContainer as RectTransform);
+            StartCoroutine(ScrollToBottom());
         }
         else
         {
-            Debug.LogError("[BackLog] NO TEXT COMPONENTS FOUND in prefab instance!");
+            needsScrollToBottom = true;
         }
-
-        // ─── Force Layout Rebuild & Visibility ───
-        var layout = item.GetComponent<LayoutElement>();
-        if (layout == null) layout = item.AddComponent<LayoutElement>();
-        layout.minHeight = 30f; // Force minimum height just in case
-        
-        // Ensure scale is 1
-        item.transform.localScale = Vector3.one;
-
-        // Auto-scroll to bottom
-        StartCoroutine(ScrollToBottom());
     }
 
     // Optional reference to get character name if needed

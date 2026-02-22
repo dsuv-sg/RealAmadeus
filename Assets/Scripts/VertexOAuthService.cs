@@ -112,256 +112,101 @@ public class VertexOAuthService : MonoBehaviour
     }
 
     // ─────────────────────────────────────────
-    // Desktop Flow (Loopback HttpListener + PKCE)
+    // Desktop Flow (gcloud CLI)
     // ─────────────────────────────────────────
 #if !UNITY_WEBGL || UNITY_EDITOR
     private IEnumerator DesktopAuthFlowCoroutine(Action onSuccess, Action<string> onError)
     {
-        int port = 50000;
-        string redirectUri = $"http://127.0.0.1:{port}/";
-        string codeVerifier = GenerateCodeVerifier();
-        string codeChallenge = GenerateCodeChallenge(codeVerifier);
+        string token = "";
+        string errorOutput = "";
+        bool isDone = false;
 
-        HttpListener listener = null;
-        try
+        // Run gcloud cli in a background thread to avoid freezing Unity
+        Task.Run(() =>
         {
-            listener = new HttpListener();
-            listener.Prefixes.Add(redirectUri);
-            listener.Start();
+            try
+            {
+                var processInfo = new System.Diagnostics.ProcessStartInfo("cmd", "/c gcloud auth print-access-token")
+                {
+                    CreateNoWindow = true,
+                    UseShellExecute = false,
+                    RedirectStandardOutput = true,
+                    RedirectStandardError = true
+                };
+
+                using (var process = System.Diagnostics.Process.Start(processInfo))
+                {
+                    token = process.StandardOutput.ReadToEnd().Trim();
+                    errorOutput = process.StandardError.ReadToEnd().Trim();
+                    process.WaitForExit();
+                }
+            }
+            catch (Exception ex)
+            {
+                errorOutput = ex.Message;
+            }
+            finally
+            {
+                isDone = true;
+            }
+        });
+
+        // Wait for task to finish
+        while (!isDone)
+        {
+            yield return null;
         }
-        catch (Exception e)
+
+        if (!string.IsNullOrEmpty(token) && token.StartsWith("ya29."))
         {
-            onError?.Invoke("認証用ローカルサーバーの起動に失敗しました: " + e.Message);
-            if (listener != null) listener.Close();
-            yield break;
-        }
-
-        string authUrl = $"https://accounts.google.com/o/oauth2/v2/auth?" +
-                         $"client_id={DEFAULT_CLIENT_ID}&" +
-                         $"redirect_uri={Uri.EscapeDataString(redirectUri)}&" +
-                         $"response_type=code&" +
-                         $"scope=https://www.googleapis.com/auth/cloud-platform&" +
-                         $"code_challenge={codeChallenge}&" +
-                         $"code_challenge_method=S256";
-
-        Application.OpenURL(authUrl);
-
-        HttpListenerContext context = null;
-        while (true)
-        {
-            var contextTask = listener.GetContextAsync();
+            CurrentAccessToken = token;
+            CurrentRefreshToken = ""; // Since we fetch a fresh one via CLI, we don't strictly need a refresh token
             
-            while (!contextTask.IsCompleted)
-            {
-                yield return null;
-            }
-
-            if (contextTask.IsFaulted)
-            {
-                onError?.Invoke("認証コールバックの待機中にエラーが発生しました。");
-                listener.Close();
-                yield break;
-            }
-
-            context = contextTask.Result;
-
-            // Ignore requests for favicon.ico or other paths
-            if (context.Request.Url.AbsolutePath != "/")
-            {
-                context.Response.StatusCode = 404;
-                context.Response.Close();
-                continue;
-            }
-
-            break; // Valid root request received
+            // Tokens retrieved via CLI are typically valid for 1 hour. We set expiry to 60 mins.
+            TokenExpiryTicks = DateTime.UtcNow.AddMinutes(60).Ticks;
+            PlayerPrefs.Save();
+            
+            Debug.Log("[Vertex AI] OAuthトークンをgcloud CLI経由で取得しました。");
+            onSuccess?.Invoke();
         }
-
-        var req = context.Request;
-        var res = context.Response;
-
-        string code = req.QueryString.Get("code");
-        string error = req.QueryString.Get("error");
-
-        if (!string.IsNullOrEmpty(error))
+        else
         {
-            SendLocalResponse(res, $"<html><body><h2>認証エラー</h2><p>{error}</p></body></html>");
-            listener.Close();
-            onError?.Invoke($"OAuth Error: {error}");
-            yield break;
-        }
-
-        SendLocalResponse(res, "<html><body><h2>認証成功</h2><p>ブラウザを閉じてアプリケーションに戻ってください。</p></body></html>");
-        listener.Close();
-
-        if (string.IsNullOrEmpty(code))
-        {
-            onError?.Invoke("認証コードが取得できませんでした。");
-            yield break;
-        }
-
-        // Exchange code for token
-        yield return StartCoroutine(ExchangeCodeForTokensCoroutine(code, codeVerifier, redirectUri, onSuccess, onError));
-    }
-
-    private void SendLocalResponse(HttpListenerResponse res, string text)
-    {
-        try
-        {
-            byte[] bytes = Encoding.UTF8.GetBytes(text);
-            res.ContentLength64 = bytes.Length;
-            res.OutputStream.Write(bytes, 0, bytes.Length);
-            res.OutputStream.Close();
-            res.Close();
-        }
-        catch { }
-    }
-
-    private IEnumerator ExchangeCodeForTokensCoroutine(string code, string codeVerifier, string redirectUri, Action onSuccess, Action<string> onError)
-    {
-        string tokenUrl = "https://oauth2.googleapis.com/token";
-
-        WWWForm form = new WWWForm();
-        form.AddField("client_id", DEFAULT_CLIENT_ID);
-        form.AddField("client_secret", DEFAULT_CLIENT_SECRET);
-        form.AddField("code", code);
-        form.AddField("code_verifier", codeVerifier);
-        form.AddField("redirect_uri", redirectUri);
-        form.AddField("grant_type", "authorization_code");
-
-        using (UnityWebRequest req = UnityWebRequest.Post(tokenUrl, form))
-        {
-            yield return req.SendWebRequest();
-
-            if (req.result != UnityWebRequest.Result.Success)
-            {
-                onError?.Invoke($"Token Exchange Error: {req.error}\n{req.downloadHandler.text}");
-            }
-            else
-            {
-                ProcessTokenResponse(req.downloadHandler.text);
-                onSuccess?.Invoke();
-            }
+            string msg = "gcloud CLIでのトークン取得に失敗しました。\n" +
+                         "エラー: " + errorOutput + "\n" +
+                         "コマンドプロンプトで 'gcloud auth application-default login' または 'gcloud auth login' を実行し、gcloudがインストールされているか確認してください。";
+            Debug.LogError(msg);
+            onError?.Invoke(msg);
         }
     }
 
     private IEnumerator RefreshAccessTokenCoroutine(string refreshToken, Action<string> onSuccess, Action<string> onError)
     {
-        string tokenUrl = "https://oauth2.googleapis.com/token";
-
-        WWWForm form = new WWWForm();
-        form.AddField("client_id", DEFAULT_CLIENT_ID);
-        form.AddField("client_secret", DEFAULT_CLIENT_SECRET);
-        form.AddField("refresh_token", refreshToken);
-        form.AddField("grant_type", "refresh_token");
-
-        using (UnityWebRequest req = UnityWebRequest.Post(tokenUrl, form))
-        {
-            yield return req.SendWebRequest();
-
-            if (req.result != UnityWebRequest.Result.Success)
-            {
-                Debug.LogWarning($"Token Refresh Failed: {req.error}\n{req.downloadHandler.text}");
-                CurrentAccessToken = "";
-                CurrentRefreshToken = ""; // Invalidate
-                PlayerPrefs.Save();
-                onError?.Invoke($"トークンの再取得に失敗しました。再度認証を行ってください。({req.error})");
-            }
-            else
-            {
-                ProcessTokenResponse(req.downloadHandler.text);
-                onSuccess?.Invoke(CurrentAccessToken);
-            }
-        }
+        // For Desktop gcloud flow, "refreshing" is just getting a new token from the CLI
+        yield return StartCoroutine(DesktopAuthFlowCoroutine(
+            () => onSuccess?.Invoke(CurrentAccessToken), 
+            onError
+        ));
     }
 #endif
 
     // ─────────────────────────────────────────
-    // WebGL Flow (Implicit Flow / hash fragment)
+    // WebGL Flow (Not Supported)
     // ─────────────────────────────────────────
 #if UNITY_WEBGL && !UNITY_EDITOR
     private void StartWebGLAuthFlow(Action<string> onError)
     {
-        string clientId = PlayerPrefs.GetString(PREF_VERTEX_CLIENT_ID, "");
-        if (string.IsNullOrEmpty(clientId))
-        {
-            onError?.Invoke("WebGL環境では独自のOAuth Client IDの設定が必要です。[Config] → [Vertex Client ID] を設定してください。");
-            return;
-        }
-
-        string redirectUri = "https://example.com/callback"; // Default fallback
-        try
-        {
-            string url = Application.absoluteURL;
-            int hashIndex = url.IndexOf('#');
-            if (hashIndex > 0) url = url.Substring(0, hashIndex);
-            int queryIndex = url.IndexOf('?');
-            if (queryIndex > 0) url = url.Substring(0, queryIndex);
-            
-            redirectUri = url;
-            if (redirectUri.EndsWith(".html")) 
-            {
-                // Most GCP setups require exact match including/excluding .html
-            }
-        }
-        catch { }
-
-        string authUrl = $"https://accounts.google.com/o/oauth2/v2/auth?" +
-                         $"client_id={clientId}&" +
-                         $"redirect_uri={Uri.EscapeDataString(redirectUri)}&" +
-                         $"response_type=token&" +
-                         $"scope=https://www.googleapis.com/auth/cloud-platform";
-
-        Application.OpenURL(authUrl);
+        onError?.Invoke("WebGL環境ではVertex AIはサポートされていません。他のAPIプロバイダーを選択してください。");
     }
 
     private void ParseWebGLRedirectHash()
     {
-        try
-        {
-            string url = Application.absoluteURL;
-            if (string.IsNullOrEmpty(url)) return;
-
-            int hashIdx = url.IndexOf("#");
-            if (hashIdx < 0) return;
-
-            string hashObj = url.Substring(hashIdx + 1);
-            string[] parts = hashObj.Split('&');
-            string token = null;
-            string expiresIn = "3600";
-
-            foreach (var p in parts)
-            {
-                if (p.StartsWith("access_token=")) token = p.Substring(13);
-                if (p.StartsWith("expires_in=")) expiresIn = p.Substring(11);
-            }
-
-            if (!string.IsNullOrEmpty(token))
-            {
-                CurrentAccessToken = token;
-                // WebGL Implicit Flow doesn't provide refresh token
-                CurrentRefreshToken = "";
-                
-                int expSeconds = 3600;
-                int.TryParse(expiresIn, out expSeconds);
-                TokenExpiryTicks = DateTime.UtcNow.AddSeconds(expSeconds).Ticks;
-                
-                PlayerPrefs.Save();
-                Debug.Log("[Vertex AI] WebGL Auth successful via URL hash.");
-                
-                // Optional: remove hash using js
-                // Application.ExternalEval("history.replaceState('', document.title, window.location.pathname + window.location.search);");
-            }
-        }
-        catch(Exception e)
-        {
-            Debug.LogError("Failed to parse WebGL hash: " + e.Message);
-        }
+        // No-op
     }
     
     // WebGL doesn't use refresh tokens with implicit flow
     private IEnumerator RefreshAccessTokenCoroutine(string refreshToken, Action<string> onSuccess, Action<string> onError)
     {
-        onError?.Invoke("WebGLでは自動更新はサポートされていません。");
+        onError?.Invoke("WebGL環境ではVertex AIはサポートされていません。");
         yield break;
     }
 #endif

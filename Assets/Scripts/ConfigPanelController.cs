@@ -47,6 +47,7 @@ public class ConfigPanelController : MonoBehaviour
     public TMP_InputField vertexProjectInputField;
     public TMP_InputField vertexLocationInputField;
     public TMP_InputField vertexClientIdInputField; // For WebGL
+    public TextMeshProUGUI vertexInfoText;
     public Toggle vertexUseGcloudToggle; // To switch between Web Auth and gcloud
     public Button vertexAuthButton;
 
@@ -178,7 +179,11 @@ public class ConfigPanelController : MonoBehaviour
         {
             VertexOAuthService.Instance.Authenticate(
                 () => Debug.Log("Vertex Auth Success"),
-                (err) => Debug.LogError("Vertex Auth Error: " + err)
+                (err) => 
+                {
+                    Debug.LogError("Vertex Auth Error: " + err);
+                    FindObjectOfType<AmadeusChatController>()?.OnAPIError(err);
+                }
             );
         }
     }
@@ -347,7 +352,7 @@ public class ConfigPanelController : MonoBehaviour
         if (webSearchToggle) webSearchToggle.isOn = PlayerPrefs.GetInt(PREF_WEB_SEARCH, 0) == 1;
 
         if (vertexProjectInputField) vertexProjectInputField.text = PlayerPrefs.GetString(PREF_VERTEX_PROJECT, "");
-        if (vertexLocationInputField) vertexLocationInputField.text = PlayerPrefs.GetString(PREF_VERTEX_LOCATION, "us-central1");
+        if (vertexLocationInputField) vertexLocationInputField.text = PlayerPrefs.GetString(PREF_VERTEX_LOCATION, "global");
         if (vertexClientIdInputField) vertexClientIdInputField.text = PlayerPrefs.GetString(VertexOAuthService.PREF_VERTEX_CLIENT_ID, "");
         if (vertexUseGcloudToggle) vertexUseGcloudToggle.isOn = PlayerPrefs.GetInt("Config_VertexUseGcloud", 0) == 1;
 
@@ -376,20 +381,25 @@ public class ConfigPanelController : MonoBehaviour
     }
 
     /// <summary>
-    /// Shows Vertex AI fields only when Vertex AI provider (index 5) is selected.
+    /// Shows Vertex AI fields only when Vertex AI provider (index 4) is selected.
     /// </summary>
     private void UpdateVertexFieldsVisibility(int providerIndex)
     {
-        bool isVertex = (providerIndex == 5); // PROVIDER_VERTEX
+        bool isVertex = (providerIndex == 4); // PROVIDER_VERTEX
         if (vertexProjectInputField) vertexProjectInputField.transform.parent.gameObject.SetActive(isVertex);
         if (vertexLocationInputField) vertexLocationInputField.transform.parent.gameObject.SetActive(isVertex);
-        if (vertexClientIdInputField) vertexClientIdInputField.transform.parent.gameObject.SetActive(isVertex);
-        if (vertexUseGcloudToggle) vertexUseGcloudToggle.transform.parent.gameObject.SetActive(isVertex);
+        if (vertexInfoText) vertexInfoText.gameObject.SetActive(isVertex);
         
-        // Hide auth button and client ID if using gcloud
-        bool useGcloud = vertexUseGcloudToggle != null && vertexUseGcloudToggle.isOn;
-        if (vertexClientIdInputField) vertexClientIdInputField.transform.parent.gameObject.SetActive(isVertex && !useGcloud);
-        if (vertexAuthButton) vertexAuthButton.gameObject.SetActive(isVertex && !useGcloud);
+        // Hide unused manual Client ID field and Use GCloud toggle UI, as gcloud is now forced
+        if (vertexClientIdInputField) vertexClientIdInputField.transform.parent.gameObject.SetActive(false);
+        if (vertexUseGcloudToggle) vertexUseGcloudToggle.transform.parent.gameObject.SetActive(false);
+        
+        // Only show Auth button for desktop
+#if UNITY_WEBGL && !UNITY_EDITOR
+        if (vertexAuthButton) vertexAuthButton.gameObject.SetActive(false);
+#else
+        if (vertexAuthButton) vertexAuthButton.gameObject.SetActive(isVertex);
+#endif
     }
 
     private void SaveSettings()
@@ -476,19 +486,9 @@ public class ConfigPanelController : MonoBehaviour
         }
 
         if (resStr.Contains("1920")) { width = 1920; height = 1080; }
+        else if (resStr.Contains("1600")) { width = 1600; height = 900; }
         else if (resStr.Contains("1280")) { width = 1280; height = 720; }
-        else if (resStr.Contains("2560")) { width = 2560; height = 1440; }
-        else if (resStr.Contains("3840")) { width = 3840; height = 2160; }
-        else if (resStr.Contains("800")) { width = 800; height = 600; }
-        else
-        {
-            switch (resIndex)
-            {
-                case 0: width = 1920; height = 1080; break;
-                case 1: width = 1280; height = 720; break;
-                case 2: width = 800; height = 600; break;
-            }
-        }
+        else if (resStr.Contains("854")) { width = 854; height = 480; }
 
         Screen.SetResolution(width, height, mode);
     }

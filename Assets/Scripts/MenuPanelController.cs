@@ -56,7 +56,12 @@ public class MenuPanelController : MonoBehaviour
     public Color normalTextColor = new Color(0.58f, 0.58f, 0.58f, 1f);
     public Color selectedTextColor = Color.white;
 
+    public TMP_Dropdown screenModeDropdown;
+
     private Coroutine currentFadeCoroutine;
+
+    /// <summary>Returns true when the menu is visible (alpha >= 0.95).</summary>
+    public bool IsMenuOpen => menuCanvasGroup != null && menuCanvasGroup.alpha >= 0.95f;
 
     // 0:BACKLOG, 1:CONFIG, 2:STATUS, 3:FULLSCREEN, 4:CHANGELOG, 
     // 5:LOGOUT, 6:HELP, 7:SHUTDOWN, 8:CLOSEMENU
@@ -90,16 +95,25 @@ public class MenuPanelController : MonoBehaviour
         UpdateVisuals();
     }
 
+    public bool IsAnySubPanelOpen
+    {
+        get
+        {
+            if (confirmationDialog != null && confirmationDialog.IsActive) return true;
+            if (configPanelController != null && configPanelController.IsActive) return true;
+            if (statusPanelController != null && statusPanelController.IsActive) return true;
+            if (changeLogPanelController != null && changeLogPanelController.IsActive) return true;
+            if (helpPanelController != null && helpPanelController.IsActive) return true;
+            if (backLogPanelController != null && backLogPanelController.IsActive) return true;
+            return false;
+        }
+    }
+
     void Update()
     {
-        // Block input if confirmation dialog is open
-        if (confirmationDialog != null && confirmationDialog.IsActive) return;
-        if (configPanelController != null && configPanelController.IsActive) return;
-        if (statusPanelController != null && statusPanelController.IsActive) return;
-        if (changeLogPanelController != null && changeLogPanelController.IsActive) return;
-        if (helpPanelController != null && helpPanelController.IsActive) return;
-        if (backLogPanelController != null && backLogPanelController.IsActive) return; // [NEW] Block input (Backspace) when BackLog is open
-        if (chatController != null && chatController.IsInteractionActive) return; // Block input while chatting
+        // Block input if any sub-panel is open
+        if (IsAnySubPanelOpen) return;
+        // NOTE: Removed IsInteractionActive guard — when the menu is open, menu input takes priority over dialogue.
 
         // Only handle input if menu is fully visible
         if (menuCanvasGroup != null && menuCanvasGroup.alpha >= 0.95f)
@@ -249,6 +263,15 @@ public class MenuPanelController : MonoBehaviour
         SetImageState(helpImage, helpDefaultSprite, helpSelectedSprite, selectedIndex == 6);
 
         SetTextState(fullscreenText, selectedIndex == 3);
+        if (fullscreenText != null)
+        {
+            // Display CURRENT state as requested:
+            // "現在の状態がフルスクリーンだったら、MenuPanelのFullScreenTextをFULL\nSCREEN"
+            // "現在の状態がウィンドウだったら、MenuPanelのFullScreenTextをWINDOW"
+            fullscreenText.text = Screen.fullScreenMode != FullScreenMode.ExclusiveFullScreen ? "WINDOW" : "FULL\nSCREEN";
+            screenModeDropdown.value = Screen.fullScreenMode != FullScreenMode.ExclusiveFullScreen ? 0 : 1;
+        }
+
         SetTextState(logoutText, selectedIndex == 5);
         SetTextState(shutdownText, selectedIndex == 7);
         SetTextState(closeMenuText, selectedIndex == 8);
@@ -394,13 +417,18 @@ public class MenuPanelController : MonoBehaviour
         if (Screen.fullScreen)
         {
             Screen.fullScreenMode = FullScreenMode.Windowed;
+
+            // Sync with ConfigPanel: 0 = Windowed
+            PlayerPrefs.SetInt("Config_ScreenMode", 1);
         }
         else
         {
-            // Prefer Borderless Fullscreen (FullScreenWindow) or Exclusive (ExclusiveFullScreen)
-            // Modern standard is usually Borderless
-            Screen.fullScreenMode = FullScreenMode.FullScreenWindow;
+            Screen.fullScreenMode = FullScreenMode.ExclusiveFullScreen;
+            // Sync with ConfigPanel: 2 = Borderless
+            PlayerPrefs.SetInt("Config_ScreenMode", 0);
         }
+        PlayerPrefs.Save();
+        fullscreenText.text = Screen.fullScreenMode == FullScreenMode.ExclusiveFullScreen ? "WINDOW" : "FULL\nSCREEN";
     }
 
     public void OnReturnTitle() => Debug.Log("Return Title");

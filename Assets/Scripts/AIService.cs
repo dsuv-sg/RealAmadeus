@@ -58,14 +58,22 @@ public class AIService : MonoBehaviour
     public void SendChat(List<ChatMessage> messages, Action<string> onSuccess, Action<string> onError)
     {
         int provider = PlayerPrefs.GetInt(PREF_API_PROVIDER, 0);
-        
+        const int MAX_PROVIDER = PROVIDER_VERTEX; // highest valid index
+        if (provider < 0 || provider > MAX_PROVIDER)
+        {
+            Debug.LogWarning($"[AIService] 無効なプロバイダーインデックス {provider} を検出。0 (OpenAI) にリセットします。");
+            provider = 0;
+            PlayerPrefs.SetInt(PREF_API_PROVIDER, 0);
+        }
+
         // Try provider-specific key first, fallback to legacy key
         string apiKey = PlayerPrefs.GetString(PREF_API_KEY_PREFIX + provider, "");
         if (string.IsNullOrEmpty(apiKey)) apiKey = PlayerPrefs.GetString(PREF_API_KEY, "");
         
         string model = PlayerPrefs.GetString(PREF_MODEL_NAME, "gpt-4o");
 
-        if (string.IsNullOrEmpty(apiKey))
+        // Vertex AI uses gcloud tokens, not API keys
+        if (string.IsNullOrEmpty(apiKey) && provider != PROVIDER_VERTEX)
         {
             onError?.Invoke("API Key が設定されていません。CONFIGから設定してください。");
             return;
@@ -92,28 +100,19 @@ public class AIService : MonoBehaviour
                 string projectId = PlayerPrefs.GetString("Config_VertexProject", "");
                 string location = PlayerPrefs.GetString("Config_VertexLocation", "us-central1");
                 
-                if (PlayerPrefs.GetInt("Config_VertexUseGcloud", 0) == 1)
+#if UNITY_WEBGL && !UNITY_EDITOR
+                onError?.Invoke("WebGL環境ではVertex AIはサポートされていません。");
+#else
+                StartCoroutine(GetVertexAccessTokenGcloudAsync((vertexToken) =>
                 {
-                    string vertexToken = GetVertexAccessTokenGcloud();
                     if (string.IsNullOrEmpty(vertexToken))
                     {
                         onError?.Invoke("Vertex AI: アクセストークンの取得に失敗しました。\ngcloud CLI がインストールされ、gcloud auth login 済みか確認してください。");
                         return;
                     }
                     StartCoroutine(SendVertexAI(vertexToken, projectId, location, model, messages, onSuccess, onError));
-                }
-                else
-                {
-                    if (VertexOAuthService.Instance == null)
-                    {
-                        onError?.Invoke("VertexOAuthServiceが初期化されていません。");
-                        return;
-                    }
-                    VertexOAuthService.Instance.GetValidAccessToken(
-                        (token) => StartCoroutine(SendVertexAI(token, projectId, location, model, messages, onSuccess, onError)),
-                        (err) => onError?.Invoke(err)
-                    );
-                }
+                }));
+#endif
                 break;
             default:
                 onError?.Invoke($"Unknown provider index: {provider}");
@@ -128,14 +127,22 @@ public class AIService : MonoBehaviour
     public void SendChatStreaming(List<ChatMessage> messages, Action<string> onToken, Action<string> onComplete, Action<string> onError)
     {
         int provider = PlayerPrefs.GetInt(PREF_API_PROVIDER, 0);
-        
+        const int MAX_PROVIDER_S = PROVIDER_VERTEX; // highest valid index
+        if (provider < 0 || provider > MAX_PROVIDER_S)
+        {
+            Debug.LogWarning($"[AIService] 無効なプロバイダーインデックス {provider} を検出。0 (OpenAI) にリセットします。");
+            provider = 0;
+            PlayerPrefs.SetInt(PREF_API_PROVIDER, 0);
+        }
+
         // Try provider-specific key first, fallback to legacy key
         string apiKey = PlayerPrefs.GetString(PREF_API_KEY_PREFIX + provider, "");
         if (string.IsNullOrEmpty(apiKey)) apiKey = PlayerPrefs.GetString(PREF_API_KEY, "");
         
         string model = PlayerPrefs.GetString(PREF_MODEL_NAME, "qwen3-32b");
 
-        if (string.IsNullOrEmpty(apiKey))
+        // Vertex AI uses gcloud tokens, not API keys
+        if (string.IsNullOrEmpty(apiKey) && provider != PROVIDER_VERTEX)
         {
             onError?.Invoke("API Key が設定されていません。CONFIGから設定してください。");
             return;
@@ -153,28 +160,19 @@ public class AIService : MonoBehaviour
             string projectId = PlayerPrefs.GetString("Config_VertexProject", "");
             string location = PlayerPrefs.GetString("Config_VertexLocation", "us-central1");
 
-            if (PlayerPrefs.GetInt("Config_VertexUseGcloud", 0) == 1)
+#if UNITY_WEBGL && !UNITY_EDITOR
+            onError?.Invoke("WebGL環境ではVertex AIはサポートされていません。");
+#else
+            StartCoroutine(GetVertexAccessTokenGcloudAsync((vertexTokenStream) =>
             {
-                string vertexTokenStream = GetVertexAccessTokenGcloud();
                 if (string.IsNullOrEmpty(vertexTokenStream))
                 {
                     onError?.Invoke("Vertex AI: アクセストークンの取得に失敗しました。\ngcloud CLI がインストールされ、gcloud auth login 済みか確認してください。");
                     return;
                 }
                 StartCoroutine(SendVertexAIStreaming(vertexTokenStream, projectId, location, model, messages, onToken, onComplete, onError));
-            }
-            else
-            {
-                if (VertexOAuthService.Instance == null)
-                {
-                    onError?.Invoke("VertexOAuthServiceが初期化されていません。");
-                    return;
-                }
-                VertexOAuthService.Instance.GetValidAccessToken(
-                    (token) => StartCoroutine(SendVertexAIStreaming(token, projectId, location, model, messages, onToken, onComplete, onError)),
-                    (err) => onError?.Invoke(err)
-                );
-            }
+            }));
+#endif
         }
         else
         {
@@ -736,55 +734,80 @@ public class AIService : MonoBehaviour
     // Vertex AI Methods
     // ─────────────────────────────────────────
 
-    private string GetVertexAccessTokenGcloud()
+    private IEnumerator GetVertexAccessTokenGcloudAsync(System.Action<string> onResult)
     {
+        // Return cached token if still valid
         if (!string.IsNullOrEmpty(cachedVertexToken) && DateTime.Now < vertexTokenExpiry)
         {
-            return cachedVertexToken;
+            onResult?.Invoke(cachedVertexToken);
+            yield break;
         }
 
-        try
-        {
-            string gcloudPath = "gcloud";
-            #if UNITY_EDITOR_WIN || UNITY_STANDALONE_WIN
-            string[] possiblePaths = new string[]
-            {
-                "gcloud",
-                System.IO.Path.Combine(System.Environment.GetFolderPath(System.Environment.SpecialFolder.LocalApplicationData), "Google", "Cloud SDK", "google-cloud-sdk", "bin", "gcloud.cmd"),
-                System.IO.Path.Combine(System.Environment.GetFolderPath(System.Environment.SpecialFolder.ProgramFiles), "Google", "Cloud SDK", "google-cloud-sdk", "bin", "gcloud.cmd"),
-                @"C:\Users\" + System.Environment.UserName + @"\AppData\Local\Google\Cloud SDK\google-cloud-sdk\bin\gcloud.cmd"
-            };
-            #else
-            string[] possiblePaths = new string[] { "gcloud", "/usr/local/bin/gcloud", "/usr/bin/gcloud" };
-            #endif
+        string resultToken = null;
+        bool taskDone = false;
 
-            foreach (string path in possiblePaths)
+        // Run gcloud process on a background thread to avoid freezing the main thread
+        System.Threading.Tasks.Task.Run(() =>
+        {
+            try
             {
-                string token = RunGcloudCommand(path);
-                if (!string.IsNullOrEmpty(token))
+                string gcloudPath = "gcloud";
+                #if UNITY_EDITOR_WIN || UNITY_STANDALONE_WIN
+                string[] possiblePaths = new string[]
                 {
-                    cachedVertexToken = token;
-                    vertexTokenExpiry = DateTime.Now.AddMinutes(TOKEN_CACHE_MINUTES);
-                    Debug.Log($"[Vertex AI] アクセストークンを自動取得しました (gcloud) 有効期限: {TOKEN_CACHE_MINUTES}分");
-                    return cachedVertexToken;
+                    "gcloud",
+                    System.IO.Path.Combine(System.Environment.GetFolderPath(System.Environment.SpecialFolder.LocalApplicationData), "Google", "Cloud SDK", "google-cloud-sdk", "bin", "gcloud.cmd"),
+                    System.IO.Path.Combine(System.Environment.GetFolderPath(System.Environment.SpecialFolder.ProgramFiles), "Google", "Cloud SDK", "google-cloud-sdk", "bin", "gcloud.cmd"),
+                    @"C:\Users\" + System.Environment.UserName + @"\AppData\Local\Google\Cloud SDK\google-cloud-sdk\bin\gcloud.cmd"
+                };
+                #else
+                string[] possiblePaths = new string[] { "gcloud", "/usr/local/bin/gcloud", "/usr/bin/gcloud" };
+                #endif
+
+                foreach (string path in possiblePaths)
+                {
+                    string token = RunGcloudCommandSync(path);
+                    if (!string.IsNullOrEmpty(token))
+                    {
+                        resultToken = token;
+                        break;
+                    }
                 }
             }
-        }
-        catch (System.Exception e)
+            catch (System.Exception e)
+            {
+                Debug.LogWarning($"[Vertex AI] gcloud トークン自動取得失敗: {e.Message}");
+            }
+            finally
+            {
+                taskDone = true;
+            }
+        });
+
+        // Wait for background thread to finish (non-blocking main thread)
+        while (!taskDone)
         {
-            Debug.LogWarning($"[Vertex AI] gcloud トークン自動取得失敗: {e.Message}");
+            yield return null;
         }
 
+        if (!string.IsNullOrEmpty(resultToken))
+        {
+            cachedVertexToken = resultToken;
+            vertexTokenExpiry = DateTime.Now.AddMinutes(TOKEN_CACHE_MINUTES);
+            Debug.Log($"[Vertex AI] アクセストークンを自動取得しました (gcloud) 有効期限: {TOKEN_CACHE_MINUTES}分");
+            onResult?.Invoke(cachedVertexToken);
+            yield break;
+        }
+
+        // Fallback to manual API key
         int currentProvider = PlayerPrefs.GetInt(PREF_API_PROVIDER, 0);
         string manualKey = PlayerPrefs.GetString(PREF_API_KEY_PREFIX + currentProvider, "");
         if (string.IsNullOrEmpty(manualKey)) manualKey = PlayerPrefs.GetString(PREF_API_KEY, "");
 
-        if (!string.IsNullOrEmpty(manualKey)) return manualKey;
-
-        return null;
+        onResult?.Invoke(!string.IsNullOrEmpty(manualKey) ? manualKey : null);
     }
 
-    private string RunGcloudCommand(string gcloudPath)
+    private string RunGcloudCommandSync(string gcloudPath)
     {
         try
         {

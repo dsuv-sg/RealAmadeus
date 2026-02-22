@@ -32,6 +32,7 @@ public class AmadeusChatController : MonoBehaviour
     [Header("Dependencies")]
     public AIService aiService;
     public MemoryManager memoryManager;
+    public MenuPanelController menuPanelController;
 
     // ─── Chat state ───
     public enum ChatState { InputReady, WaitingAPI, Typing, StreamingTyping, WaitForAdvance }
@@ -465,6 +466,12 @@ ASSISTANT: [NORMAL] 理論的には可能だけど、実証には多くのハー
             else Debug.LogError("AmadeusChatController: MemoryManager reference is MISSING and could not be found!");
         }
 
+        if (menuPanelController == null)
+        {
+            menuPanelController = FindObjectOfType<MenuPanelController>();
+            if (menuPanelController != null) Debug.Log("AmadeusChatController: Auto-linked MenuPanelController reference.");
+        }
+
         // Initialize Status Panel with current settings
         UpdateStatusPanelStats(0f);
         
@@ -514,6 +521,10 @@ ASSISTANT: [NORMAL] 理論的には可能だけど、実証には多くのハー
                 autoModeIndicator.SetActive(isAutoMode);
             }
         }
+        
+        // ─── Pause dialogue input while menu is open ───
+        bool menuOpen = (menuPanelController != null && menuPanelController.IsMenuOpen);
+        if (menuOpen) return; // Skip Enter key and Auto timer while menu is visible
         
         // Sync with Config if changed elsewhere (optional, but good for consistency if config is open)
         // For performance, we might just reload on menu close, but checking prefs every frame is slow.
@@ -676,14 +687,7 @@ ASSISTANT: [NORMAL] 理論的には可能だけど、実証には多くのハー
 
     private string BuildFullSystemPrompt()
     {
-        string basePrompt = KURISU_SYSTEM_PROMPT;
-        
-        // Use short prompt for Gemini/Vertex to save tokens/quota
-        int provider = PlayerPrefs.GetInt("Config_ApiProvider", 0);
-        if (provider == 1 || provider == 5) // Gemini or Vertex AI
-        {
-            basePrompt = KURISU_SYSTEM_PROMPT_SHORT;
-        }
+        string basePrompt = KURISU_SYSTEM_PROMPT_SHORT;
 
         StringBuilder sb = new StringBuilder(basePrompt);
 
@@ -706,14 +710,7 @@ ASSISTANT: [NORMAL] 理論的には可能だけど、実証には多くのハー
     /// </summary>
     private void UpdateSystemPromptWithContext()
     {
-        string basePrompt = KURISU_SYSTEM_PROMPT;
-        
-        // Use short prompt for Gemini/Vertex
-        int provider = PlayerPrefs.GetInt("Config_ApiProvider", 0);
-        if (provider == 1 || provider == 5) // Gemini or Vertex AI
-        {
-            basePrompt = KURISU_SYSTEM_PROMPT_SHORT;
-        }
+        string basePrompt = KURISU_SYSTEM_PROMPT_SHORT;
 
         StringBuilder sb = new StringBuilder(basePrompt);
 
@@ -804,7 +801,7 @@ ASSISTANT: [NORMAL] 理論的には可能だけど、実証には多くのハー
             int provider = PlayerPrefs.GetInt("Config_ApiProvider", 0);
 
             // Use streaming for Groq and Vertex AI providers
-            if (provider == 3 || provider == 5) // PROVIDER_GROQ or PROVIDER_VERTEX
+            if (provider == 3 || provider == 4) // PROVIDER_GROQ or PROVIDER_VERTEX
             {
                 aiService.SendChatStreaming(
                     new List<AIService.ChatMessage>(conversationHistory),
@@ -861,8 +858,7 @@ ASSISTANT: [NORMAL] 理論的には可能だけど、実証には多くのハー
         float latency = (Time.realtimeSinceStartup - requestStartTime) * 1000f;
         UpdateStatusPanelStats(latency);
 
-        // ─── BackLog: Assistant ───
-        if (backLog != null) backLog.AddLog("Kurisu", displayText);
+        // BackLog logging is now handled per-page in the typewriter coroutines
 
         conversationHistory.Add(new AIService.ChatMessage("assistant", displayText));
 
@@ -1003,22 +999,69 @@ ASSISTANT: [NORMAL] 理論的には可能だけど、実証には多くのハー
         }
 
         conversationHistory.Add(new AIService.ChatMessage("assistant", cleanResponse));
+
+        // BackLog logging is now handled per-page in StreamingTypewriterEffect
     }
 
-    private void OnAPIError(string error)
+    public void OnAPIError(string error)
     {
-        Debug.LogError($"AI Error: {error}");
-        
-        // Custom Error Message for API Key issues
-        if (error.Contains("API key") || error.Contains("authentication") || error.Contains("invalid key") || error.Contains("401"))
+        Debug.LogWarning($"[AI Error] {error}");
+
+        // ── Kurisu speaks the error in-character ──
+        string kurisuMessage;
+
+        if (error.Contains("API Key") || error.Contains("API key") || error.Contains("設定されていません"))
         {
-            currentFullText = "APIキーが間違っているらしいわよ";
+            kurisuMessage = "……APIキーが設定されてないみたいよ。CONFIGから設定してちょうだい。";
+        }
+        else if (error.Contains("401") || error.Contains("authentication") || error.Contains("invalid key") || error.Contains("Unauthorized"))
+        {
+            kurisuMessage = "APIキーが無効みたい……もう一度確認して設定し直してくれる？";
+        }
+        else if (error.Contains("429") || error.Contains("rate limit") || error.Contains("Rate limit") || error.Contains("quota"))
+        {
+            kurisuMessage = "リクエストが多すぎるみたい。少し待ってからもう一度試してくれない？";
+        }
+        else if (error.Contains("timeout") || error.Contains("Timeout") || error.Contains("timed out"))
+        {
+            kurisuMessage = "応答がタイムアウトしたわ……ネットワークの状態を確認してみて。";
+        }
+        else if (error.Contains("Cannot connect") || error.Contains("Cannot resolve") || error.Contains("Network") || error.Contains("ネットワーク"))
+        {
+            kurisuMessage = "ネットワークに接続できないわ。インターネット接続を確認してちょうだい。";
+        }
+        else if (error.Contains("Unknown provider") || error.Contains("無効なプロバイダー"))
+        {
+            kurisuMessage = "APIプロバイダーの設定がおかしいわ。CONFIGからプロバイダーを選び直して。";
+        }
+        else if (error.Contains("403") || error.Contains("Forbidden"))
+        {
+            kurisuMessage = "このAPIへのアクセスが拒否されたわ。権限を確認してみて。";
+        }
+        else if (error.Contains("500") || error.Contains("Internal Server") || error.Contains("502") || error.Contains("503"))
+        {
+            kurisuMessage = "サーバー側でエラーが起きてるみたい。しばらくしてからもう一度試して。";
+        }
+        else if (error.Contains("model") || error.Contains("Model"))
+        {
+            kurisuMessage = "指定されたモデルが見つからないみたい。CONFIGからモデル名を確認して。";
+        }
+        else if (error.Contains("VertexOAuthService") || error.Contains("アクセストークン") || error.Contains("gcloud"))
+        {
+            kurisuMessage = "Vertex AIの認証に失敗したわ。gcloudの設定を確認してみて。";
         }
         else
         {
-            currentFullText = $"[通信エラー] {error}";
+            kurisuMessage = "何かエラーが起きたみたい……もう一度試してくれる？";
         }
 
+        // Show with ANGRY expression
+        ProcessEmotion("ANGRY");
+
+        // ─── BackLog: Error message ───
+        if (backLog != null) backLog.AddLog("Kurisu", kurisuMessage);
+
+        currentFullText = kurisuMessage;
         SetState(ChatState.Typing);
         if (typewriterCoroutine != null) StopCoroutine(typewriterCoroutine);
         typewriterCoroutine = StartCoroutine(TypewriterEffect(currentFullText));
@@ -1066,6 +1109,15 @@ ASSISTANT: [NORMAL] 理論的には可能だけど、実証には多くのハー
 
         for (int i = 0; i < text.Length; i++)
         {
+            // Pause while menu is open
+            if (menuPanelController != null && menuPanelController.IsMenuOpen)
+            {
+                isSpeaking = false;
+                while (menuPanelController != null && menuPanelController.IsMenuOpen)
+                    yield return null;
+                isSpeaking = true;
+            }
+
             if (skipTyping)
             {
                 dialogueText.text = text;
@@ -1093,6 +1145,10 @@ ASSISTANT: [NORMAL] 理論的には可能だけど、実証には多くのハー
 
         isSpeaking = false;
         dialogueText.text = text;
+
+        // ─── BackLog: log the full text as a single page ───
+        if (backLog != null) backLog.AddLog("Kurisu", text);
+
         SetState(ChatState.WaitForAdvance);
     }
 
@@ -1109,6 +1165,7 @@ ASSISTANT: [NORMAL] 理論的には可能だけど、実証には多くのハー
 
         if (dialogueText == null) yield break;
         dialogueText.text = "";
+        string lastLoggedPageText = "";
 
         float speedMultiplier = PlayerPrefs.GetFloat("Config_TextSpeed", 1.0f);
         float baseDelay = defaultCharDelay / Mathf.Max(speedMultiplier, 0.1f);
@@ -1119,6 +1176,15 @@ ASSISTANT: [NORMAL] 理論的には可能だけど、実証には多くのハー
 
             if (streamDisplayIndex < currentBuffer.Length)
             {
+                // Pause while menu is open
+                if (menuPanelController != null && menuPanelController.IsMenuOpen)
+                {
+                    isSpeaking = false;
+                    while (menuPanelController != null && menuPanelController.IsMenuOpen)
+                        yield return null;
+                    isSpeaking = true;
+                }
+
                 // Parse character
                 char c = currentBuffer[streamDisplayIndex];
 
@@ -1166,6 +1232,14 @@ ASSISTANT: [NORMAL] 理論的には可能だけど、実証には多くのハー
                     skipTyping = false;
                     autoModeTimer = 0f;
 
+                    // ─── BackLog: log this page before waiting for input ───
+                    string pageText = dialogueText.text;
+                    if (backLog != null && !string.IsNullOrWhiteSpace(pageText))
+                    {
+                        backLog.AddLog("Kurisu", pageText);
+                        lastLoggedPageText = pageText;
+                    }
+
                     if (waitingIndicator)
                     {
                         waitingIndicator.gameObject.SetActive(true);
@@ -1180,6 +1254,7 @@ ASSISTANT: [NORMAL] 理論的には可能だけど、実証には多くのハー
                     if (streamDisplayIndex < currentBuffer.Length || !streamComplete)
                     {
                         dialogueText.text = "";
+                        lastLoggedPageText = ""; // Reset since we cleared the text
                     }
 
                     isSpeaking = true;
@@ -1204,6 +1279,15 @@ ASSISTANT: [NORMAL] 理論的には可能だけど、実証には多くのハー
         }
 
         isSpeaking = false;
+
+        // ─── BackLog: log the final page (remaining text after last pause) ───
+        if (dialogueText != null)
+        {
+            string finalPage = dialogueText.text;
+            if (backLog != null && !string.IsNullOrWhiteSpace(finalPage) && finalPage != lastLoggedPageText)
+                backLog.AddLog("Kurisu", finalPage);
+        }
+
         streamBuffer.Clear();
         streamEmotionParsed = false;
         streamEmotionTag = "";

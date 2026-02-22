@@ -64,17 +64,24 @@ public class SystemPanelController : MonoBehaviour
 
     void Update()
     {
-        // Toggle target on key press
-        if (Input.GetKeyDown(KeyCode.Tab))
+        // Do not allow toggling the menu if any sub-panel (Config, Status, etc.) is open
+        bool isSubPanelOpen = sideMenuController != null && sideMenuController.IsAnySubPanelOpen;
+
+        if (!isSubPanelOpen)
         {
-            ToggleState();
+            // Toggle target on key press
+            if (Input.GetKeyDown(KeyCode.Tab))
+            {
+                ToggleState();
+            }
+
+            // Right Click Toggle (if enabled)
+            if (Input.GetMouseButtonDown(1) && PlayerPrefs.GetInt("Config_RightClickMenu", 1) == 1)
+            {
+                ToggleState();
+            }
         }
 
-        // Right Click Toggle (if enabled)
-        if (Input.GetMouseButtonDown(1) && PlayerPrefs.GetInt("Config_RightClickMenu", 1) == 1)
-        {
-             ToggleState();
-        }
 
         // Smoothly move currentT towards targetT
         if (Mathf.Abs(currentT - targetT) > Mathf.Epsilon)
