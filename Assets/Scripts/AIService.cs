@@ -19,6 +19,7 @@ public class AIService : MonoBehaviour
     private const string PREF_API_KEY = "Config_ApiKey";
     private const string PREF_API_KEY_PREFIX = "Config_ApiKey_";
     private const string PREF_MODEL_NAME = "Config_ModelName";
+    private const string PREF_MODEL_NAME_PREFIX = "Config_ModelName_";
     private const string PREF_WEB_SEARCH = "Config_WebSearch";
 
     // Provider indices (matching ConfigPanel dropdown order)
@@ -70,7 +71,9 @@ public class AIService : MonoBehaviour
         string apiKey = PlayerPrefs.GetString(PREF_API_KEY_PREFIX + provider, "");
         if (string.IsNullOrEmpty(apiKey)) apiKey = PlayerPrefs.GetString(PREF_API_KEY, "");
         
-        string model = PlayerPrefs.GetString(PREF_MODEL_NAME, "gpt-4o");
+        // Try provider-specific model first, fallback to legacy
+        string model = PlayerPrefs.GetString(PREF_MODEL_NAME_PREFIX + provider, "");
+        if (string.IsNullOrEmpty(model)) model = PlayerPrefs.GetString(PREF_MODEL_NAME, "gpt-4o");
 
         // Vertex AI uses gcloud tokens, not API keys
         if (string.IsNullOrEmpty(apiKey) && provider != PROVIDER_VERTEX)
@@ -139,7 +142,9 @@ public class AIService : MonoBehaviour
         string apiKey = PlayerPrefs.GetString(PREF_API_KEY_PREFIX + provider, "");
         if (string.IsNullOrEmpty(apiKey)) apiKey = PlayerPrefs.GetString(PREF_API_KEY, "");
         
-        string model = PlayerPrefs.GetString(PREF_MODEL_NAME, "qwen3-32b");
+        // Try provider-specific model first, fallback to legacy
+        string model = PlayerPrefs.GetString(PREF_MODEL_NAME_PREFIX + provider, "");
+        if (string.IsNullOrEmpty(model)) model = PlayerPrefs.GetString(PREF_MODEL_NAME, "qwen3-32b");
 
         // Vertex AI uses gcloud tokens, not API keys
         if (string.IsNullOrEmpty(apiKey) && provider != PROVIDER_VERTEX)

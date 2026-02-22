@@ -84,10 +84,12 @@ public class ConfigPanelController : MonoBehaviour
     private Action onCloseCallback;
     private int activeCategoryIndex = 0;
     
-    // Multiple API Key Support
+    // Multiple API Key and Model Name Support
     private Dictionary<int, string> apiKeys = new Dictionary<int, string>();
+    private Dictionary<int, string> modelNames = new Dictionary<int, string>();
     private int currentApiProviderIndex = 0;
     private const string PREF_API_KEY_PREFIX = "Config_ApiKey_";
+    private const string PREF_MODEL_NAME_PREFIX = "Config_ModelName_";
 
     public bool IsActive => gameObject.activeSelf;
 
@@ -333,6 +335,7 @@ public class ConfigPanelController : MonoBehaviour
             for (int i = 0; i < providerCount; i++)
             {
                 string key = PlayerPrefs.GetString(PREF_API_KEY_PREFIX + i, "");
+                string modelName = PlayerPrefs.GetString(PREF_MODEL_NAME_PREFIX + i, "");
                 
                 // Legacy Migration: If Groq (3) is explicitly empty, check old global key
                 // Or just try to migrate global key if specific key is empty
@@ -342,13 +345,20 @@ public class ConfigPanelController : MonoBehaviour
                      if (!string.IsNullOrEmpty(legacyKey)) key = legacyKey;
                 }
                 apiKeys[i] = key;
+
+                if (string.IsNullOrEmpty(modelName) && i == currentApiProviderIndex)
+                {
+                     string legacyModel = PlayerPrefs.GetString(PREF_MODEL_NAME, "");
+                     if (!string.IsNullOrEmpty(legacyModel)) modelName = legacyModel;
+                }
+                modelNames[i] = modelName;
             }
 
             // Set input field to current provider's buffer
             if (apiKeyInputField) apiKeyInputField.text = apiKeys.ContainsKey(currentApiProviderIndex) ? apiKeys[currentApiProviderIndex] : "";
+            if (modelNameInputField) modelNameInputField.text = modelNames.ContainsKey(currentApiProviderIndex) ? modelNames[currentApiProviderIndex] : "";
         }
         
-        if (modelNameInputField) modelNameInputField.text = PlayerPrefs.GetString(PREF_MODEL_NAME, "qwen3-32b");
         if (webSearchToggle) webSearchToggle.isOn = PlayerPrefs.GetInt(PREF_WEB_SEARCH, 0) == 1;
 
         if (vertexProjectInputField) vertexProjectInputField.text = PlayerPrefs.GetString(PREF_VERTEX_PROJECT, "");
@@ -366,6 +376,10 @@ public class ConfigPanelController : MonoBehaviour
         {
             apiKeys[currentApiProviderIndex] = apiKeyInputField.text;
         }
+        if (modelNameInputField)
+        {
+            modelNames[currentApiProviderIndex] = modelNameInputField.text;
+        }
 
         // Update index
         currentApiProviderIndex = newIndex;
@@ -375,6 +389,11 @@ public class ConfigPanelController : MonoBehaviour
         {
             string key = apiKeys.ContainsKey(newIndex) ? apiKeys[newIndex] : "";
             apiKeyInputField.text = key;
+        }
+        if (modelNameInputField)
+        {
+            string modelName = modelNames.ContainsKey(newIndex) ? modelNames[newIndex] : "";
+            modelNameInputField.text = modelName;
         }
 
         UpdateVertexFieldsVisibility(newIndex);
@@ -389,6 +408,7 @@ public class ConfigPanelController : MonoBehaviour
         if (vertexProjectInputField) vertexProjectInputField.transform.parent.gameObject.SetActive(isVertex);
         if (vertexLocationInputField) vertexLocationInputField.transform.parent.gameObject.SetActive(isVertex);
         if (vertexInfoText) vertexInfoText.gameObject.SetActive(isVertex);
+        if (apiKeyInputField) apiKeyInputField.transform.parent.gameObject.SetActive(!isVertex);
         
         // Hide unused manual Client ID field and Use GCloud toggle UI, as gcloud is now forced
         if (vertexClientIdInputField) vertexClientIdInputField.transform.parent.gameObject.SetActive(false);
@@ -428,14 +448,25 @@ public class ConfigPanelController : MonoBehaviour
             // Ensure current input is in buffer
             apiKeys[currentApiProviderIndex] = apiKeyInputField.text;
         }
+        if (modelNameInputField)
+        {
+            // Ensure current input is in buffer
+            modelNames[currentApiProviderIndex] = modelNameInputField.text;
+        }
+
         foreach (var kvp in apiKeys)
         {
             PlayerPrefs.SetString(PREF_API_KEY_PREFIX + kvp.Key, kvp.Value);
         }
+        foreach (var kvp in modelNames)
+        {
+            PlayerPrefs.SetString(PREF_MODEL_NAME_PREFIX + kvp.Key, kvp.Value);
+        }
+
         // Also update legacy key for compatibility if needed (optional, saving current)
         if (apiKeyInputField) PlayerPrefs.SetString(PREF_API_KEY, apiKeyInputField.text);
-
         if (modelNameInputField) PlayerPrefs.SetString(PREF_MODEL_NAME, modelNameInputField.text);
+
         if (webSearchToggle) PlayerPrefs.SetInt(PREF_WEB_SEARCH, webSearchToggle.isOn ? 1 : 0);
 
         if (vertexProjectInputField) PlayerPrefs.SetString(PREF_VERTEX_PROJECT, vertexProjectInputField.text);

@@ -1855,7 +1855,8 @@ ASSISTANT: [NORMAL] 理論的には可能だけど、実証には多くのハー
 
         int providerIdx = PlayerPrefs.GetInt("Config_ApiProvider", 0);
         string providerName = "Unknown";
-        string modelName = PlayerPrefs.GetString("Config_ModelName", "default");
+        string modelName = PlayerPrefs.GetString("Config_ModelName_" + providerIdx, "");
+        if (string.IsNullOrEmpty(modelName)) modelName = PlayerPrefs.GetString("Config_ModelName", "default");
 
         switch (providerIdx)
         {

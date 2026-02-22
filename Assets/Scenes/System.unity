@@ -54174,7 +54174,7 @@ MonoBehaviour:
   vertexProjectInputField: {fileID: 966146679}
   vertexLocationInputField: {fileID: 1113491940}
   vertexClientIdInputField: {fileID: 1234161932}
-  vertexInfoText: {fileID: 0}
+  vertexInfoText: {fileID: 1284785411}
   vertexUseGcloudToggle: {fileID: 0}
   vertexAuthButton: {fileID: 0}
   saveButton: {fileID: 1245508733}
