@@ -1,7 +1,9 @@
 リアルアマデウスのリポジトリです。
+
 バグ修正/機能追加などの要望を、IssuesやDMにいただけたらうれしいです。
 
 当プロジェクトはSteins;Gate 0の二次創作プロジェクトです。
+
 NitroPlusの二次創作ガイドライン
 
 https://www.nitroplus.co.jp/company/license/fan-fiction/
@@ -11,6 +13,7 @@ https://www.nitroplus.co.jp/company/license/fan-fiction/
 よって、DSUVもしくはElveltが利用者に対して金銭等の支払いを要求しないことをここに明記します。
 
 This is the Real Amadeus repository.
+
 We would appreciate it if you could send us requests for bug fixes/feature additions via Issues or DM.
 
 This project is a fan fiction project based on Steins;Gate 0.
