@@ -533,8 +533,6 @@ ASSISTANT: [NORMAL] 理論的には可能だけど、実証には多くのハー
         switch (currentState)
         {
             case ChatState.Typing:
-                if (Keyboard.current.enterKey.wasPressedThisFrame) skipTyping = true;
-                break;
             case ChatState.StreamingTyping:
                 if (Keyboard.current.enterKey.wasPressedThisFrame)
                 {

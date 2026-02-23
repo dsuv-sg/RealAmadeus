@@ -203,6 +203,7 @@ public class AIService : MonoBehaviour
             req.downloadHandler = new DownloadHandlerBuffer();
             req.SetRequestHeader("Content-Type", "application/json");
             req.SetRequestHeader("Authorization", $"Bearer {apiKey}");
+            req.timeout = 60;
 
             yield return req.SendWebRequest();
 
@@ -263,6 +264,7 @@ public class AIService : MonoBehaviour
             req.uploadHandler = new UploadHandlerRaw(bodyRaw);
             req.downloadHandler = new DownloadHandlerBuffer();
             req.SetRequestHeader("Content-Type", "application/json");
+            req.timeout = 60;
 
             yield return req.SendWebRequest();
 
@@ -350,6 +352,7 @@ public class AIService : MonoBehaviour
             req.SetRequestHeader("Content-Type", "application/json");
             req.SetRequestHeader("x-api-key", apiKey);
             req.SetRequestHeader("anthropic-version", "2023-06-01");
+            req.timeout = 60;
 
             yield return req.SendWebRequest();
 
@@ -434,6 +437,7 @@ public class AIService : MonoBehaviour
             req.downloadHandler = new DownloadHandlerBuffer();
             req.SetRequestHeader("Content-Type", "application/json");
             req.SetRequestHeader("Authorization", $"Bearer {apiKey}");
+            req.timeout = 60;
 
             yield return req.SendWebRequest();
 
@@ -470,6 +474,7 @@ public class AIService : MonoBehaviour
             req.SetRequestHeader("Content-Type", "application/json");
             req.SetRequestHeader("Authorization", $"Bearer {apiKey}");
             req.SetRequestHeader("Accept", "text/event-stream");
+            req.timeout = 120;
 
             var op = req.SendWebRequest();
             StringBuilder fullResponse = new StringBuilder();
@@ -590,6 +595,7 @@ public class AIService : MonoBehaviour
             req.downloadHandler = new DownloadHandlerBuffer();
             req.SetRequestHeader("Content-Type", "application/json");
             req.SetRequestHeader("Authorization", $"Bearer {apiKey}");
+            req.timeout = 60;
 
             yield return req.SendWebRequest();
 
@@ -621,6 +627,7 @@ public class AIService : MonoBehaviour
             req.SetRequestHeader("Content-Type", "application/json");
             req.SetRequestHeader("Authorization", $"Bearer {apiKey}");
             req.SetRequestHeader("Accept", "text/event-stream");
+            req.timeout = 120;
 
             var op = req.SendWebRequest();
             StringBuilder fullResponse = new StringBuilder();
@@ -915,6 +922,7 @@ public class AIService : MonoBehaviour
                 req.downloadHandler = new DownloadHandlerBuffer();
                 req.SetRequestHeader("Content-Type", "application/json");
                 req.SetRequestHeader("Authorization", $"Bearer {accessToken}");
+                req.timeout = 60;
 
                 yield return req.SendWebRequest();
 
@@ -968,6 +976,7 @@ public class AIService : MonoBehaviour
                 req.downloadHandler = new DownloadHandlerBuffer();
                 req.SetRequestHeader("Content-Type", "application/json");
                 req.SetRequestHeader("Authorization", $"Bearer {accessToken}");
+                req.timeout = 120;
 
                 var op = req.SendWebRequest();
                 int lastProcessedIndex = 0;
