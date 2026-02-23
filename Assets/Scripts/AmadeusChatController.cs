@@ -1122,9 +1122,11 @@ ASSISTANT: [NORMAL] 理論的には可能だけど、実証には多くのハー
     {
         skipTyping = false;
         isSpeaking = true;
+        isWaitingForInput = false;
 
         if (dialogueText == null) yield break;
         dialogueText.text = "";
+        string lastLoggedPageText = "";
 
         float speedMultiplier = PlayerPrefs.GetFloat("Config_TextSpeed", 1.0f);
         float baseDelay = defaultCharDelay / Mathf.Max(speedMultiplier, 0.1f);
@@ -1140,37 +1142,82 @@ ASSISTANT: [NORMAL] 理論的には可能だけど、実証には多くのハー
                 isSpeaking = true;
             }
 
-            if (skipTyping)
+            char c = text[i];
+
+            // Skip leading whitespace if we just cleared the page
+            if (dialogueText.text.Length == 0 && char.IsWhiteSpace(c))
             {
-                dialogueText.text = text;
-                break;
+                continue;
             }
 
-            dialogueText.text = text.Substring(0, i + 1);
+            dialogueText.text += c;
 
-            char c = text[i];
-            float delay = baseDelay;
-            if (c == '。' || c == '！' || c == '？' || c == '!' || c == '?')
-                delay = baseDelay * 4f;
-            else if (c == '、' || c == ',' || c == '…')
-                delay = baseDelay * 2.5f;
-            else if (c == '」' || c == '）' || c == '）')
-                delay = baseDelay * 1.5f;
+            // Pause Check
+            bool isPauseChar = (c == '。' || c == '！' || c == '？' || c == '!' || c == '?' || c == '\n');
+            // Don't pause if next char is closing bracket
+            if (isPauseChar && i + 1 < text.Length)
+            {
+                char nextC = text[i + 1];
+                if (nextC == '」' || nextC == '）' || nextC == ')' || nextC == '』' || nextC == '”')
+                {
+                    isPauseChar = false;
+                }
+            }
 
-            if (c == '。' || c == '、' || c == '！' || c == '？' || c == '…')
+            if (isPauseChar)
+            {
                 isSpeaking = false;
-            else
-                isSpeaking = true;
+                isWaitingForInput = true;
+                skipTyping = false;
+                autoModeTimer = 0f;
 
-            yield return new WaitForSeconds(delay);
+                // ─── BackLog: log this page before waiting for input ───
+                string pageText = dialogueText.text;
+                if (backLog != null && !string.IsNullOrWhiteSpace(pageText))
+                {
+                    backLog.AddLog("Kurisu", pageText);
+                    lastLoggedPageText = pageText;
+                }
+
+                if (waitingIndicator)
+                {
+                    waitingIndicator.gameObject.SetActive(true);
+                    waitingIndicator.text = "▼";
+                }
+
+                while (isWaitingForInput) yield return null;
+                
+                if (waitingIndicator) waitingIndicator.gameObject.SetActive(false);
+                
+                // Only clear if we have more content to show (paging effect)
+                if (i + 1 < text.Length)
+                {
+                    dialogueText.text = "";
+                    lastLoggedPageText = ""; // Reset since we cleared the text
+                }
+
+                isSpeaking = true;
+            }
+            else if (!skipTyping)
+            {
+                float delay = baseDelay;
+                if (c == '、' || c == ',' || c == '…') delay = baseDelay * 2.5f;
+                else if (c == '」' || c == '）') delay = baseDelay * 1.5f;
+                yield return new WaitForSeconds(delay);
+            }
         }
 
         isSpeaking = false;
-        dialogueText.text = text;
 
-        // ─── BackLog: log the full text as a single page ───
-        if (backLog != null) backLog.AddLog("Kurisu", text);
+        // ─── BackLog: log the final page (remaining text after last pause) ───
+        if (dialogueText != null)
+        {
+            string finalPage = dialogueText.text;
+            if (backLog != null && !string.IsNullOrWhiteSpace(finalPage) && finalPage != lastLoggedPageText)
+                backLog.AddLog("Kurisu", finalPage);
+        }
 
+        isWaitingForInput = false;
         SetState(ChatState.WaitForAdvance);
     }
 
