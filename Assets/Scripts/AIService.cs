@@ -337,7 +337,7 @@ public class AIService : MonoBehaviour
     // ─────────────────────────────────────────
     private IEnumerator SendClaude(string apiKey, string model, List<ChatMessage> messages, Action<string> onSuccess, Action<string> onError)
     {
-        if (string.IsNullOrEmpty(model) || model.StartsWith("gpt") || model.StartsWith("gemini")) model = "claude-sonnet-4-20250514";
+        if (string.IsNullOrEmpty(model) || model.StartsWith("gpt") || model.StartsWith("gemini")) model = "claude-3-7-sonnet-20250219";
         string url = "https://api.anthropic.com/v1/messages";
 
         string body = BuildClaudeBody(model, messages);

@@ -829,21 +829,38 @@ ASSISTANT: [NORMAL] 理論的には可能だけど、実証には多くのハー
     private void OnAPISuccess(string response)
     {
         string displayText = response;
-        string tag = "";
-
-        // Parse [TAG]Text
-        if (response.StartsWith("["))
-        {
-            int closeBracket = response.IndexOf("]");
-            if (closeBracket > 0)
-            {
-                tag = response.Substring(1, closeBracket - 1);
-                displayText = response.Substring(closeBracket + 1).Trim();
-            }
-        }
+        string tag = "NORMAL";
 
         // Strip thinking tags from qwen3 if present (e.g., <think>...</think>)
         displayText = StripThinkingTags(displayText);
+
+        // --- 全AI共通: 正規表現で文中の [TAG] をすべて検知・除去 ---
+        // 許可されているタグ一覧
+        string pattern = @"\[(NORMAL|SMILE|ANGRY|SAD|SURPRISED|BLUSH|WINK|DISGUST|SMUG|THINKING|PANIC)\]";
+        
+        System.Text.RegularExpressions.MatchCollection matches = System.Text.RegularExpressions.Regex.Matches(displayText, pattern, System.Text.RegularExpressions.RegexOptions.IgnoreCase);
+        if (matches.Count > 0)
+        {
+            // 最初に見つかったタグ（または一番最後のタグ等）を表情として採用する
+            // AIが先頭に書き忘れて途中に書いた場合でも拾える
+            tag = matches[0].Groups[1].Value.ToUpper();
+            
+            // テキストからすべての許可タグを綺麗に消し去る
+            displayText = System.Text.RegularExpressions.Regex.Replace(displayText, pattern, "", System.Text.RegularExpressions.RegexOptions.IgnoreCase).Trim();
+        }
+        else
+        {
+            // 正規表現にマッチしなかったが、万が一 [ ] だけが残っている場合の従来のフォールバック（不要かもしれないが一応残す）
+            if (displayText.StartsWith("["))
+            {
+                int closeBracket = displayText.IndexOf("]");
+                if (closeBracket > 0)
+                {
+                    tag = displayText.Substring(1, closeBracket - 1);
+                    displayText = displayText.Substring(closeBracket + 1).Trim();
+                }
+            }
+        }
 
         // Trigger emotion & expression
         ProcessEmotion(tag);
@@ -989,6 +1006,11 @@ ASSISTANT: [NORMAL] 理論的には可能だけど、実証には多くのハー
         string cleanResponse = string.IsNullOrEmpty(fullResponse) ? streamBuffer.ToString() : fullResponse;
         cleanResponse = StripThinkingTags(cleanResponse);
 
+        // --- ストリーミング時も、完了時に履歴に残るテキストから全タグを確実に消去しておく ---
+        string pattern = @"\[(NORMAL|SMILE|ANGRY|SAD|SURPRISED|BLUSH|WINK|DISGUST|SMUG|THINKING|PANIC)\]";
+        cleanResponse = System.Text.RegularExpressions.Regex.Replace(cleanResponse, pattern, "", System.Text.RegularExpressions.RegexOptions.IgnoreCase).Trim();
+
+        // 従来のフォールバック
         if (cleanResponse.StartsWith("["))
         {
             int closeBracket = cleanResponse.IndexOf("]");
@@ -1195,17 +1217,22 @@ ASSISTANT: [NORMAL] 理論的には可能だけど、実証には多くのハー
                     continue;
                 }
 
-                // Handle emotion tags
+                // Handle emotion tags anywhere in the stream
                 if (c == '[')
                 {
                     int closingIndex = currentBuffer.IndexOf(']', streamDisplayIndex);
                     if (closingIndex != -1)
                     {
-                        string tag = currentBuffer.Substring(streamDisplayIndex, closingIndex - streamDisplayIndex + 1);
-                        string emotionName = tag.Trim('[', ']'); 
-                        ProcessEmotion(emotionName);
-                        streamDisplayIndex = closingIndex + 1;
-                        continue;
+                        string tagBody = currentBuffer.Substring(streamDisplayIndex + 1, closingIndex - streamDisplayIndex - 1);
+                        // 指定のタグに一致するかチェックし、一致すれば表示から除外＆表情変更
+                        string patternMatch = @"^(NORMAL|SMILE|ANGRY|SAD|SURPRISED|BLUSH|WINK|DISGUST|SMUG|THINKING|PANIC)$";
+                        if (System.Text.RegularExpressions.Regex.IsMatch(tagBody, patternMatch, System.Text.RegularExpressions.RegexOptions.IgnoreCase))
+                        {
+                            ProcessEmotion(tagBody.ToUpper());
+                            streamDisplayIndex = closingIndex + 1; // タグ全体をスキップ
+                            continue;
+                        }
+                        // もし指定タグ以外（例えばユーザーが打った [括弧] など）なら、そのままスキップせずに表示へ回す
                     }
                 }
 

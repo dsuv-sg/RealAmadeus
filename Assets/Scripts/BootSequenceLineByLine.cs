@@ -60,7 +60,7 @@ Updating init.rc<pos=30%>[OK]
 
 Boot Sequences Start...";
 
-    void Start()
+    void OnEnable()
     {
         // Check Skip Loading
         if (PlayerPrefs.GetInt("Config_SkipLoading", 0) == 1)
@@ -166,5 +166,10 @@ Boot Sequences Start...";
         terminalText.ForceMeshUpdate();
         int finalEndIndex = terminalText.textInfo.lineInfo[currentLineIndex].lastVisibleCharacterIndex;
         terminalText.maxVisibleCharacters = finalEndIndex + 1;
+    }
+
+    void OnDisable()
+    {
+        StopAllCoroutines();
     }
 }

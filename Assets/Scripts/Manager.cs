@@ -60,6 +60,13 @@ public class Manager : MonoBehaviour
         PlayerPrefs.Save();
         UpdateOperatorDisplay("---");
 
+        // Clear backlog
+        var backLog = FindObjectOfType<BackLogController>(true);
+        if (backLog != null)
+        {
+            backLog.ClearLogs();
+        }
+
         if (mainPanel != null) mainPanel.SetActive(false);
         if (loadingPanel != null) loadingPanel.SetActive(false); // Ensure loading is off
         
@@ -77,26 +84,23 @@ public class Manager : MonoBehaviour
     /// </summary>
     private void UpdateOperatorDisplay(string name)
     {
-        // Find Row_OPERATOR value text (second Text child with positive localPosition.x)
-        Transform row = null;
-        var canvas = GameObject.Find("Canvas");
-        if (canvas != null)
+        var statusPanel = FindObjectOfType<StatusPanelController>(true);
+        if (statusPanel != null)
         {
-            row = canvas.transform.Find("StatusPanel/InfoGrid/LeftCol/Row_OPERATOR");
-        }
-
-        if (row != null)
-        {
-            foreach (Transform child in row)
+            Transform row = statusPanel.transform.Find("InfoGrid/LeftCol/Row_OPERATOR");
+            if (row != null)
             {
-                if (child.name == "Text" && child.localPosition.x > 0)
+                foreach (Transform child in row)
                 {
-                    var tmp = child.GetComponent<TextMeshProUGUI>();
-                    if (tmp != null)
+                    if (child.name == "Text" && child.localPosition.x > 0)
                     {
-                        tmp.text = name;
+                        var tmp = child.GetComponent<TextMeshProUGUI>();
+                        if (tmp != null)
+                        {
+                            tmp.text = name;
+                        }
+                        break;
                     }
-                    break;
                 }
             }
         }

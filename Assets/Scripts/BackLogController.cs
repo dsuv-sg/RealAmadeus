@@ -236,4 +236,14 @@ public class BackLogController : MonoBehaviour
         yield return new WaitForEndOfFrame();
         if (scrollRect) scrollRect.verticalNormalizedPosition = 0f;
     }
+
+    public void ClearLogs()
+    {
+        if (contentContainer == null) return;
+        foreach (Transform child in contentContainer)
+        {
+            Destroy(child.gameObject);
+        }
+        needsScrollToBottom = true;
+    }
 }

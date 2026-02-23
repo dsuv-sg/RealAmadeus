@@ -268,8 +268,8 @@ public class MenuPanelController : MonoBehaviour
             // Display CURRENT state as requested:
             // "現在の状態がフルスクリーンだったら、MenuPanelのFullScreenTextをFULL\nSCREEN"
             // "現在の状態がウィンドウだったら、MenuPanelのFullScreenTextをWINDOW"
-            fullscreenText.text = Screen.fullScreenMode != FullScreenMode.ExclusiveFullScreen ? "WINDOW" : "FULL\nSCREEN";
-            screenModeDropdown.value = Screen.fullScreenMode != FullScreenMode.ExclusiveFullScreen ? 0 : 1;
+            fullscreenText.text = Screen.fullScreenMode != FullScreenMode.FullScreenWindow ? "WINDOW" : "FULL\nSCREEN";
+            screenModeDropdown.value = Screen.fullScreenMode != FullScreenMode.FullScreenWindow ? 0 : 1;
         }
 
         SetTextState(logoutText, selectedIndex == 5);
@@ -423,12 +423,12 @@ public class MenuPanelController : MonoBehaviour
         }
         else
         {
-            Screen.fullScreenMode = FullScreenMode.ExclusiveFullScreen;
+            Screen.fullScreenMode = FullScreenMode.FullScreenWindow;
             // Sync with ConfigPanel: 2 = Borderless
             PlayerPrefs.SetInt("Config_ScreenMode", 0);
         }
         PlayerPrefs.Save();
-        fullscreenText.text = Screen.fullScreenMode == FullScreenMode.ExclusiveFullScreen ? "WINDOW" : "FULL\nSCREEN";
+        fullscreenText.text = Screen.fullScreenMode == FullScreenMode.FullScreenWindow ? "WINDOW" : "FULL\nSCREEN";
     }
 
     public void OnReturnTitle() => Debug.Log("Return Title");

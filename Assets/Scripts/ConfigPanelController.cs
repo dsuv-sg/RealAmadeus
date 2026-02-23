@@ -493,13 +493,13 @@ public class ConfigPanelController : MonoBehaviour
 
         if (screenModeStr.Contains("window") || screenModeStr.Contains("ウィンドウ")) mode = FullScreenMode.Windowed;
         else if (screenModeStr.Contains("border") || screenModeStr.Contains("ボーダー")) mode = FullScreenMode.FullScreenWindow;
-        else if (screenModeStr.Contains("full") || screenModeStr.Contains("フル")) mode = FullScreenMode.ExclusiveFullScreen;
+        else if (screenModeStr.Contains("full") || screenModeStr.Contains("フル")) mode = FullScreenMode.FullScreenWindow;
         else
         {
             // Fallback assuming the typical order 1. FullScreen 2. Windowed 3. Borderless
             switch (screenModeIndex)
             {
-                case 0: mode = FullScreenMode.ExclusiveFullScreen; break;
+                case 0: mode = FullScreenMode.FullScreenWindow; break;
                 case 1: mode = FullScreenMode.Windowed; break;
                 case 2: mode = FullScreenMode.FullScreenWindow; break;
             }
