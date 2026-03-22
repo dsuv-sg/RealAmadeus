@@ -24,6 +24,20 @@ https://www.nitroplus.co.jp/company/license/fan-fiction/
 
 Therefore, we hereby state that neither DSUV nor Elvelt will request any monetary payment from users.
 
+## How to use / 使用方法
+
+本リポジトリをクローンし、Unity 6(6000.3.2f1)でプロジェクトを読み込んで下さい。
+
+[Live2DのUnitySDK](https://www.live2d.com/sdk/download/unity/) を、利用規約を許諾した上で、ダウンロードしてください。
+
+CubismSdkForUnity-X-r.X.X.unitypackageを開き、Assets/Live2Dとなるように配置して下さい。
+
+Clone this repository and load the project in Unity 6 (6000.3.2f1).
+
+Download the [Live2D Unity SDK](https://www.live2d.com/sdk/download/unity/) after agreeing to the terms of use.
+
+Open CubismSdkForUnity-X-r.X.X.unitypackage and place it so that it becomes Assets/Live2D.
+
 ## License / ライセンス
 
 本プロジェクトは **CC BY-NC 4.0 (クリエイティブ・コモンズ 表示 - 非営利 4.0 国際)** の下でライセンスされています。以下の条件に従ってご利用ください：
