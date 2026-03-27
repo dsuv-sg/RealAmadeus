@@ -32,6 +32,12 @@ public class HelpPanelController : MonoBehaviour
         }
         gameObject.SetActive(false);
 
+        if (closeButton == null)
+        {
+            Transform btn = transform.Find("Btn_Close");
+            if (btn != null) closeButton = btn.GetComponent<Button>();
+        }
+
         if (closeButton) closeButton.onClick.AddListener(OnCloseClicked);
     }
 
@@ -92,5 +98,62 @@ public class HelpPanelController : MonoBehaviour
 
         if (panelCanvasGroup) panelCanvasGroup.alpha = end;
         if (disableOnFinish) gameObject.SetActive(false);
+    }
+
+    /// <summary>
+    /// Refreshes the text content based on the current language setting.
+    /// </summary>
+    public void UpdateLanguage()
+    {
+        bool isEn = PlayerPrefs.GetInt("Config_Language", 0) == 1;
+
+        // Translation Map
+        var map = new System.Collections.Generic.Dictionary<string, string>
+        {
+            { "閉じる", "Close" },
+            { "Tab / 右クリック", "Tab / Right Click" },
+            { "メニュー開閉", "Open/Close Menu" },
+            { "保存して閉じる", "Apply and Close" },
+            { "WASD / ↑←↓→", "WASD / Arrows" },
+            { "項目選択", "Navigate Items" },
+            { "決定 / 会話を進める", "Select / Advance Conv." }
+        };
+
+        var texts = GetComponentsInChildren<TMPro.TextMeshProUGUI>(true);
+        foreach (var tmp in texts)
+        {
+            if (tmp == null || string.IsNullOrEmpty(tmp.text)) continue;
+
+            string currentText = Normalize(tmp.text);
+
+            if (isEn)
+            {
+                foreach (var kv in map)
+                {
+                    if (currentText == Normalize(kv.Key))
+                    {
+                        tmp.text = kv.Value;
+                        break;
+                    }
+                }
+            }
+            else
+            {
+                foreach (var kv in map)
+                {
+                    if (currentText == Normalize(kv.Value))
+                    {
+                        tmp.text = kv.Key;
+                        break;
+                    }
+                }
+            }
+        }
+    }
+
+    private string Normalize(string s)
+    {
+        if (s == null) return "";
+        return s.Replace("\r\n", "\n").Replace("\r", "\n").Trim();
     }
 }

@@ -9,6 +9,11 @@ using TMPro;
 /// </summary>
 public class BackLogController : MonoBehaviour
 {
+    private const float EntrySidePadding = 20f;
+    private const float EntryVerticalPadding = 5f;
+    private const float NameColumnWidth = 115f;
+    private const float ColumnSpacing = 150f;
+
     [Header("UI References")]
     public GameObject backLogPanel;
     public CanvasGroup panelCanvasGroup; // [NEW] Loop
@@ -48,6 +53,12 @@ public class BackLogController : MonoBehaviour
         }
         if (backLogPanel) backLogPanel.SetActive(false); // Ensure inactive start
 
+        if (closeButton == null)
+        {
+            Transform btn = transform.Find("Btn_Close");
+            if (btn != null) closeButton = btn.GetComponent<Button>();
+        }
+
         if (closeButton) closeButton.onClick.AddListener(Hide);
     }
     
@@ -73,8 +84,10 @@ public class BackLogController : MonoBehaviour
         if (backLogPanel)
         {
             backLogPanel.SetActive(true);
+            UpdateLanguage();
             if (currentFadeCoroutine != null) StopCoroutine(currentFadeCoroutine);
             currentFadeCoroutine = StartCoroutine(FadeCanvas(0f, 1f));
+            RecalculateAllLogEntryHeights();
             // Rebuild layout and scroll (handles deferred entries added while inactive)
             if (contentContainer != null)
                 LayoutRebuilder.ForceRebuildLayoutImmediate(contentContainer as RectTransform);
@@ -145,22 +158,23 @@ public class BackLogController : MonoBehaviour
         if (string.IsNullOrWhiteSpace(cleanMessage)) return;
 
         // Determine display info
-        string namePrefix;
+        bool isEn = PlayerPrefs.GetInt("Config_Language", 0) == 1;
+        string namePrefix = GetNameForRole(role, isEn);
         Color nameColor;
         switch (role.ToLower())
         {
             case "user": case "me":
-                namePrefix = "あなた"; nameColor = userColor; break;
+                nameColor = userColor; break;
             case "assistant": case "kurisu": case "amadeus":
-                namePrefix = "紅莉栖"; nameColor = aiColor; break;
+                nameColor = aiColor; break;
             case "system":
-                namePrefix = "SYSTEM"; nameColor = systemColor; break;
+                nameColor = systemColor; break;
             default:
-                namePrefix = role.ToUpper(); nameColor = Color.gray; break;
+                nameColor = Color.gray; break;
         }
 
         // Create item from scratch for reliable layout
-        GameObject item = new GameObject("LogEntry", typeof(RectTransform), typeof(CanvasRenderer));
+        GameObject item = new GameObject("LogEntry_" + role.ToLower(), typeof(RectTransform), typeof(CanvasRenderer));
         item.transform.SetParent(contentContainer, false);
 
         // RectTransform: stretch horizontally, auto height
@@ -179,24 +193,46 @@ public class BackLogController : MonoBehaviour
         csf.horizontalFit = ContentSizeFitter.FitMode.Unconstrained;
         csf.verticalFit = ContentSizeFitter.FitMode.PreferredSize;
 
-        // Single TMP text with rich text for name coloring
-        var textObj = new GameObject("Text", typeof(RectTransform), typeof(CanvasRenderer));
-        textObj.transform.SetParent(item.transform, false);
+        var hlg = item.AddComponent<HorizontalLayoutGroup>();
+        hlg.padding = new RectOffset((int)EntrySidePadding, (int)EntrySidePadding, (int)EntryVerticalPadding, (int)EntryVerticalPadding);
+        hlg.spacing = ColumnSpacing;
+        hlg.childControlWidth = true;
+        hlg.childControlHeight = true;
+        hlg.childForceExpandWidth = false;
+        hlg.childForceExpandHeight = false;
 
-        RectTransform textRT = textObj.GetComponent<RectTransform>();
-        textRT.anchorMin = Vector2.zero;
-        textRT.anchorMax = Vector2.one;
-        textRT.offsetMin = new Vector2(20, 5);
-        textRT.offsetMax = new Vector2(-20, -5);
+        // Name column
+        var nameObj = new GameObject("NameText", typeof(RectTransform), typeof(CanvasRenderer));
+        nameObj.transform.SetParent(item.transform, false);
+        var nameLE = nameObj.AddComponent<LayoutElement>();
+        nameLE.minWidth = NameColumnWidth;
+        nameLE.preferredWidth = NameColumnWidth;
+        nameLE.flexibleWidth = 0f;
 
-        var tmp = textObj.AddComponent<TextMeshProUGUI>();
-        string hexColor = ColorUtility.ToHtmlStringRGB(nameColor);
-        tmp.text = $"<color=#{hexColor}><b>{namePrefix}</b></color>　{cleanMessage}";
-        tmp.fontSize = 26;
-        tmp.color = Color.white;
-        tmp.enableWordWrapping = true;
-        tmp.overflowMode = TextOverflowModes.Overflow;
-        tmp.raycastTarget = false;
+        var nameTMP = nameObj.AddComponent<TextMeshProUGUI>();
+        nameTMP.text = $"<b>{namePrefix}</b>";
+        nameTMP.fontSize = 26;
+        nameTMP.color = nameColor;
+        nameTMP.alignment = TextAlignmentOptions.TopLeft;
+        nameTMP.enableWordWrapping = false;
+        nameTMP.overflowMode = TextOverflowModes.Overflow;
+        nameTMP.raycastTarget = false;
+
+        // Message column
+        var messageObj = new GameObject("MessageText", typeof(RectTransform), typeof(CanvasRenderer));
+        messageObj.transform.SetParent(item.transform, false);
+        var messageLE = messageObj.AddComponent<LayoutElement>();
+        messageLE.minWidth = 100f;
+        messageLE.flexibleWidth = 1f;
+
+        var messageTMP = messageObj.AddComponent<TextMeshProUGUI>();
+        messageTMP.text = cleanMessage;
+        messageTMP.fontSize = 26;
+        messageTMP.color = Color.white;
+        messageTMP.alignment = TextAlignmentOptions.TopLeft;
+        messageTMP.enableWordWrapping = true;
+        messageTMP.overflowMode = TextOverflowModes.Overflow;
+        messageTMP.raycastTarget = false;
 
         // Try to use the same font as the prefab
         if (logItemPrefab != null)
@@ -204,8 +240,10 @@ public class BackLogController : MonoBehaviour
             var prefabTMP = logItemPrefab.GetComponentInChildren<TextMeshProUGUI>();
             if (prefabTMP != null && prefabTMP.font != null)
             {
-                tmp.font = prefabTMP.font;
-                tmp.fontSharedMaterial = prefabTMP.fontSharedMaterial;
+                nameTMP.font = prefabTMP.font;
+                nameTMP.fontSharedMaterial = prefabTMP.fontSharedMaterial;
+                messageTMP.font = prefabTMP.font;
+                messageTMP.fontSharedMaterial = prefabTMP.fontSharedMaterial;
             }
         }
 
@@ -213,6 +251,8 @@ public class BackLogController : MonoBehaviour
         var le = item.AddComponent<LayoutElement>();
         le.minHeight = 40f;
         le.flexibleWidth = 1f;
+
+        UpdateLogEntryHeight(messageTMP, le);
 
         item.transform.localScale = Vector3.one;
 
@@ -245,5 +285,87 @@ public class BackLogController : MonoBehaviour
             Destroy(child.gameObject);
         }
         needsScrollToBottom = true;
+    }
+
+    private void RecalculateAllLogEntryHeights()
+    {
+        if (contentContainer == null) return;
+
+        foreach (Transform child in contentContainer)
+        {
+            var messageTransform = child.Find("MessageText");
+            if (messageTransform == null) continue;
+
+            var tmp = messageTransform.GetComponent<TextMeshProUGUI>();
+            if (tmp == null) continue;
+
+            var le = child.GetComponent<LayoutElement>();
+            if (le == null)
+            {
+                le = child.gameObject.AddComponent<LayoutElement>();
+                le.minHeight = 40f;
+                le.flexibleWidth = 1f;
+            }
+
+            UpdateLogEntryHeight(tmp, le);
+        }
+    }
+
+    private void UpdateLogEntryHeight(TextMeshProUGUI tmp, LayoutElement le)
+    {
+        if (tmp == null || le == null) return;
+
+        const float verticalPadding = EntryVerticalPadding * 2f;
+
+        float availableWidth = 600f;
+        RectTransform containerRect = contentContainer as RectTransform;
+        if (containerRect != null && containerRect.rect.width > 0f)
+        {
+            float innerWidth = containerRect.rect.width - (EntrySidePadding * 2f);
+            availableWidth = Mathf.Max(1f, innerWidth - NameColumnWidth - ColumnSpacing);
+        }
+
+        tmp.ForceMeshUpdate();
+        Vector2 preferred = tmp.GetPreferredValues(tmp.text, availableWidth, 0f);
+        le.preferredHeight = Mathf.Max(le.minHeight, preferred.y + verticalPadding);
+    }
+
+    /// <summary>
+    /// Refreshes the display names of all existing log entries based on Config_Language.
+    /// </summary>
+    public void UpdateLanguage()
+    {
+        if (contentContainer == null) return;
+
+        bool isEn = PlayerPrefs.GetInt("Config_Language", 0) == 1;
+
+        foreach (Transform child in contentContainer)
+        {
+            // Extract role from GameObject name "LogEntry_{role}"
+            string role = child.name.StartsWith("LogEntry_") ? child.name.Substring(9) : "";
+            if (string.IsNullOrEmpty(role)) continue;
+
+            Transform nameTf = child.Find("NameText");
+            if (nameTf == null) continue;
+
+            var tmp = nameTf.GetComponent<TextMeshProUGUI>();
+            if (tmp == null) continue;
+
+            string namePrefix = GetNameForRole(role, isEn);
+            tmp.text = $"<b>{namePrefix}</b>";
+        }
+    }
+
+    private string GetNameForRole(string role, bool isEn)
+    {
+        switch (role.ToLower())
+        {
+            case "user": case "me":
+                return isEn ? "You" : "あなた";
+            case "assistant": case "kurisu": case "amadeus":
+                return isEn ? "Amadeus Kurisu" : "アマデウス紅莉栖";
+            default:
+                return role.ToUpper();
+        }
     }
 }

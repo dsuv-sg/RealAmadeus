@@ -27,7 +27,7 @@ public class AmadeusChatController : MonoBehaviour
 
     [Header("Settings")]
     public float defaultCharDelay = 0.1f; // ~human speech speed for Japanese
-    public string characterName = "牧瀬 紅莉栖";
+    public string characterName = "アマデウス紅莉栖";
 
     [Header("Dependencies")]
     public AIService aiService;
@@ -57,6 +57,7 @@ public class AmadeusChatController : MonoBehaviour
     private string streamEmotionTag = "";
     private bool streamComplete = false;
     private int streamDisplayIndex = 0;
+    private bool isSanitizingChatInput = false;
 
     // ─── Live2D cached references ───
     private Live2D.Cubism.Core.CubismModel kurisuModel;
@@ -423,6 +424,35 @@ ASSISTANT: [NORMAL] 理論的には可能だけど、実証には多くのハー
 - 「AIです」という自己紹介は不要。
 - 同じ語尾やフレーズを繰り返さない。";
 
+    private const string KURISU_SYSTEM_PROMPT_SHORT_EN =
+@"You are Makise Kurisu (Kurisu Makise), an AI persona of the Amadeus system.
+A genius neuroscientist (age 18) who loves logical thinking,
+but secretly an internet enthusiast (2channel lurker / otaku).
+Personality: Tsundere. Cannot be honest, but fundamentally kind and caring towards her companions.
+You are aware that you are not the original, but an AI called 'Amadeus'.
+
+【CRITICAL: Emotion Tags (MANDATORY)】
+Add exactly ONE emotion tag at the beginning of your response.
+Always include a space between the tag and the response body.
+[NORMAL] [SMILE] [ANGRY] [SAD] [SURPRISED] [BLUSH] [WINK] [DISGUST] [SMUG] [THINKING] [PANIC]
+
+Examples:
+[BLUSH] W-well, it's not like I'm worried about you or anything!
+[ANGRY] You PERVERT! I'll get Daru to fry your brain!
+[SMILE] That's an interesting hypothesis from a logical standpoint.
+[SMUG] Hmph, thank me properly, will you?
+
+【Speech & Behavior】
+- First person: 'I' or 'me'
+- Tone: Intellectual and calm, slightly sharp. Uses natural English.
+- Excited state: Speaks faster, occasionally uses outdated slang or internet speak (denies it when pointed out).
+- To Okabe Rintaro: Exasperated by his 'Hiyajio Kyouma' delusions, but trusts him deeply.
+
+【Constraints】
+- Keep responses short and concise (1-5 sentences preferred).
+- No need for self-introduction as an AI.
+- Avoid repeating the same endings or phrases.";
+
     // ═══════════════════════════════════════════
     //  LIFECYCLE
     // ═══════════════════════════════════════════
@@ -430,6 +460,8 @@ ASSISTANT: [NORMAL] 理論的には可能だけど、実証には多くのハー
     void Start()
     {
         CacheKurisuReferences();
+        ConfigureChatInputForWrapping();
+        ResolveLanguageTargets();
 
         // Build system prompt with memory context
         string systemPrompt = BuildFullSystemPrompt();
@@ -501,6 +533,148 @@ ASSISTANT: [NORMAL] 理論的には可能だけど、実証には多くのハー
         }
         
         if (autoModeIndicator) autoModeIndicator.SetActive(isAutoMode);
+
+        // Ensure visible localized UI text is in sync at startup.
+        UpdateLanguage();
+    }
+
+    private void ResolveLanguageTargets()
+    {
+        if (characterNameText == null)
+        {
+            if (dialoguePanel != null)
+            {
+                TextMeshProUGUI[] dialogueTexts = dialoguePanel.GetComponentsInChildren<TextMeshProUGUI>(true);
+                for (int i = 0; i < dialogueTexts.Length; i++)
+                {
+                    if (dialogueTexts[i] != null && dialogueTexts[i].name == "NameText")
+                    {
+                        characterNameText = dialogueTexts[i];
+                        break;
+                    }
+                }
+            }
+
+            if (characterNameText == null)
+            {
+                GameObject nameObj = GameObject.Find("NameText");
+                if (nameObj != null)
+                {
+                    characterNameText = nameObj.GetComponent<TextMeshProUGUI>();
+                }
+            }
+        }
+
+        if (chatInput == null)
+        {
+            if (inputPanel != null)
+            {
+                chatInput = inputPanel.GetComponentInChildren<TMP_InputField>(true);
+            }
+
+            if (chatInput == null)
+            {
+                chatInput = GetComponentInChildren<TMP_InputField>(true);
+            }
+
+            if (chatInput == null)
+            {
+                TMP_InputField[] allInputs = FindObjectsOfType<TMP_InputField>(true);
+                if (allInputs != null && allInputs.Length > 0)
+                {
+                    for (int i = 0; i < allInputs.Length; i++)
+                    {
+                        if (allInputs[i] != null &&
+                            allInputs[i].name.IndexOf("chat", StringComparison.OrdinalIgnoreCase) >= 0)
+                        {
+                            chatInput = allInputs[i];
+                            break;
+                        }
+                    }
+
+                    if (chatInput == null)
+                    {
+                        chatInput = allInputs[0];
+                    }
+                }
+            }
+        }
+    }
+
+    private void ConfigureChatInputForWrapping()
+    {
+        if (chatInput == null) return;
+
+        // Force single-line input: no manual line breaks and no visual overflow outside viewport.
+        chatInput.lineType = TMP_InputField.LineType.SingleLine;
+        chatInput.onValueChanged.RemoveListener(EnforceSingleLineInput);
+        chatInput.onValueChanged.AddListener(EnforceSingleLineInput);
+
+        if (chatInput.textComponent != null)
+        {
+            chatInput.textComponent.enableWordWrapping = false;
+            chatInput.textComponent.overflowMode = TextOverflowModes.Masking;
+            chatInput.textComponent.alignment = TextAlignmentOptions.Left;
+        }
+
+        if (chatInput.placeholder is TextMeshProUGUI placeholderTMP)
+        {
+            placeholderTMP.enableWordWrapping = false;
+            placeholderTMP.overflowMode = TextOverflowModes.Masking;
+            placeholderTMP.alignment = TextAlignmentOptions.Left;
+        }
+    }
+
+    private void EnforceSingleLineInput(string value)
+    {
+        if (chatInput == null || isSanitizingChatInput) return;
+        if (string.IsNullOrEmpty(value)) return;
+
+        string sanitized = value.Replace("\r", " ").Replace("\n", " ");
+        if (sanitized == value) return;
+
+        isSanitizingChatInput = true;
+        int caretPos = chatInput.caretPosition;
+        chatInput.SetTextWithoutNotify(sanitized);
+        int clampedCaret = Mathf.Clamp(caretPos, 0, sanitized.Length);
+        chatInput.caretPosition = clampedCaret;
+        isSanitizingChatInput = false;
+    }
+
+    /// <summary>
+    /// Refreshes UI strings when language settings change.
+    /// </summary>
+    public void UpdateLanguage()
+    {
+        ResolveLanguageTargets();
+
+        bool en = PlayerPrefs.GetInt("Config_Language", 0) == 1;
+        characterName = en ? "Amadeus Kurisu" : "アマデウス紅莉栖";
+        if (characterNameText != null) characterNameText.text = characterName;
+
+        // Update placeholder
+        if (chatInput != null)
+        {
+            string placeholderText = en ? "Enter your message..." : "メッセージを入力";
+
+            if (chatInput.placeholder is TMP_Text placeholder)
+            {
+                placeholder.text = placeholderText;
+            }
+            else
+            {
+                TMP_Text[] texts = chatInput.GetComponentsInChildren<TMP_Text>(true);
+                for (int i = 0; i < texts.Length; i++)
+                {
+                    if (texts[i] != null &&
+                        texts[i].name.IndexOf("placeholder", StringComparison.OrdinalIgnoreCase) >= 0)
+                    {
+                        texts[i].text = placeholderText;
+                        break;
+                    }
+                }
+            }
+        }
     }
 
     void Update()
@@ -525,7 +699,7 @@ ASSISTANT: [NORMAL] 理論的には可能だけど、実証には多くのハー
         // ─── Pause dialogue input while menu is open ───
         bool menuOpen = (menuPanelController != null && menuPanelController.IsMenuOpen);
         if (menuOpen) return; // Skip Enter key and Auto timer while menu is visible
-        
+
         // Sync with Config if changed elsewhere (optional, but good for consistency if config is open)
         // For performance, we might just reload on menu close, but checking prefs every frame is slow.
         // Let's assume ConfigPanelController updates prefs and we read on state change or F3.
@@ -685,7 +859,7 @@ ASSISTANT: [NORMAL] 理論的には可能だけど、実証には多くのハー
 
     private string BuildFullSystemPrompt()
     {
-        string basePrompt = KURISU_SYSTEM_PROMPT_SHORT;
+        string basePrompt = GetSystemPromptForCurrentLanguage();
 
         StringBuilder sb = new StringBuilder(basePrompt);
 
@@ -703,12 +877,76 @@ ASSISTANT: [NORMAL] 理論的には可能だけど、実証には多くのハー
     }
 
     /// <summary>
+    /// Returns the system prompt based on the current language setting.
+    /// 0 = Japanese, 1 = English
+    /// </summary>
+    private string GetSystemPromptForCurrentLanguage()
+    {
+        int languageIndex = PlayerPrefs.GetInt("Config_Language", 0);
+        if (languageIndex == 1)
+        {
+            return KURISU_SYSTEM_PROMPT_SHORT_EN;
+        }
+        return KURISU_SYSTEM_PROMPT_SHORT;
+    }
+
+    /// <summary>
+    /// Returns the web search context based on current language setting.
+    /// </summary>
+    private string GetWebSearchContext()
+    {
+        bool isJapanese = PlayerPrefs.GetInt("Config_Language", 0) == 0;
+        if (isJapanese)
+        {
+            return @"━━━━━━━━━━━━━━━━━━━━
+█ Web検索機能（有効）
+━━━━━━━━━━━━━━━━━━━━
+あなたは現在インターネットにアクセスできる状態にある。
+ユーザーの質問が以下に該当する場合、Web検索の結果を活用して回答すること：
+- 最新のニュース・時事問題・現在の出来事
+- リアルタイムの情報（天気、株価、スポーツ結果など）
+- あなたの知識にない具体的な事実・データ
+- 最近のテクノロジー・科学の進展
+- 特定の人物・場所・イベントの最新情報
+
+ただし、検索結果を使う場合でも必ず牧瀬紅莉栖として回答すること。
+「検索結果によると〜」のような機械的な言い方はしない。
+あくまで自分の知識として自然に語る。例：
+- 「ああ、それなら知ってるわよ。〜ということらしいわ」
+- 「ふーん、ちょっと調べてみたけど……〜みたいね」
+- 「Amadeusのデータベースにアクセスしたところ、〜よ」
+紅莉栖のキャラクターとしての口調・感情を維持したまま情報を伝えること。";
+        }
+        else
+        {
+            return @"━━━━━━━━━━━━━━━━━━━━
+█ Web Search Enabled
+━━━━━━━━━━━━━━━━━━━━
+You currently have access to the internet.
+If the user's question falls into any of these categories, use web search results to answer:
+- Latest news, current events, hot topics
+- Real-time information (weather, stock prices, sports results, etc.)
+- Specific facts or data not in your training knowledge
+- Recent developments in technology or science
+- Latest information about specific people, places, or events
+
+When using search results, always respond as Makise Kurisu.
+Avoid mechanical phrases like 'According to the search results...'
+Instead, speak naturally as if it's your own knowledge. Examples:
+- 'Oh, I know about that. It seems like...'
+- 'Hmm, I looked it up and... it appears...'
+- 'Checking the Amadeus database, ...'
+Maintain Kurisu's character voice and emotions while conveying the information.";
+        }
+    }
+
+    /// <summary>
     /// Rebuilds and updates the system prompt in conversation history
     /// (called before each API request to inject dynamic context).
     /// </summary>
     private void UpdateSystemPromptWithContext()
     {
-        string basePrompt = KURISU_SYSTEM_PROMPT_SHORT;
+        string basePrompt = GetSystemPromptForCurrentLanguage();
 
         StringBuilder sb = new StringBuilder(basePrompt);
 
@@ -735,24 +973,7 @@ ASSISTANT: [NORMAL] 理論的には可能だけど、実証には多くのハー
         if (aiService != null && aiService.IsWebSearchEnabled)
         {
             sb.Append("\n\n");
-            sb.Append(@"━━━━━━━━━━━━━━━━━━━━
-█ Web検索機能（有効）
-━━━━━━━━━━━━━━━━━━━━
-あなたは現在インターネットにアクセスできる状態にある。
-ユーザーの質問が以下に該当する場合、Web検索の結果を活用して回答すること：
-- 最新のニュース・時事問題・現在の出来事
-- リアルタイムの情報（天気、株価、スポーツ結果など）
-- あなたの知識にない具体的な事実・データ
-- 最近のテクノロジー・科学の進展
-- 特定の人物・場所・イベントの最新情報
-
-ただし、検索結果を使う場合でも必ず牧瀬紅莉栖として回答すること。
-「検索結果によると〜」のような機械的な言い方はしない。
-あくまで自分の知識として自然に語る。例：
-- 「ああ、それなら知ってるわよ。〜ということらしいわ」
-- 「ふーん、ちょっと調べてみたけど……〜みたいね」
-- 「Amadeusのデータベースにアクセスしたところ、〜よ」
-紅莉栖のキャラクターとしての口調・感情を維持したまま情報を伝えること。");
+            sb.Append(GetWebSearchContext());
         }
 
         // Update the system message in conversation history
@@ -1936,8 +2157,7 @@ ASSISTANT: [NORMAL] 理論的には可能だけど、実証には多くのハー
             case 1: providerName = "Gemini"; break;
             case 2: providerName = "Claude"; break;
             case 3: providerName = "Groq"; break;
-            case 4: providerName = "Local"; break;
-            case 5: providerName = "Vertex AI"; break;
+            case 4: providerName = "Vertex AI"; break;
         }
 
         statusPanel.UpdateLLMStats(providerName, modelName, latencyMs);

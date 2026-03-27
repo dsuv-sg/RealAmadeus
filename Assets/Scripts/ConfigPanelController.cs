@@ -16,6 +16,8 @@ public class ConfigPanelController : MonoBehaviour
     [Header("General Settings")]
     public Toggle skipLoadingToggle;
     public Toggle rightClickMenuToggle;
+    public TMP_Dropdown languageDropdown;
+    public TextMeshProUGUI languageLabelText;
 
     [Header("Text Settings")]
     public Slider textSpeedSlider;
@@ -64,6 +66,7 @@ public class ConfigPanelController : MonoBehaviour
     // Keys for PlayerPrefs (Updated)
     private const string PREF_SKIP_LOADING = "Config_SkipLoading";
     private const string PREF_RIGHT_CLICK_MENU = "Config_RightClickMenu";
+    private const string PREF_LANGUAGE = "Config_Language";
     private const string PREF_TEXT_SPEED = "Config_TextSpeed";
     private const string PREF_AUTO_SPEED = "Config_AutoSpeed";
     private const string PREF_AUTO_MODE = "Config_AutoMode"; // Added Pref Key
@@ -88,6 +91,7 @@ public class ConfigPanelController : MonoBehaviour
     private Dictionary<int, string> apiKeys = new Dictionary<int, string>();
     private Dictionary<int, string> modelNames = new Dictionary<int, string>();
     private int currentApiProviderIndex = 0;
+    private int currentLanguageIndex = 0; // 0: Japanese, 1: English
     private const string PREF_API_KEY_PREFIX = "Config_ApiKey_";
     private const string PREF_MODEL_NAME_PREFIX = "Config_ModelName_";
 
@@ -111,7 +115,7 @@ public class ConfigPanelController : MonoBehaviour
         if (cancelButton) cancelButton.onClick.AddListener(OnCancelClicked);
         
         // Sliders
-        if (textSpeedSlider) textSpeedSlider.onValueChanged.AddListener(val => UpdateSliderText(textSpeedValueText, val, "x{0:F1}"));
+        if (textSpeedSlider) textSpeedSlider.onValueChanged.AddListener(val => UpdateSliderText(textSpeedValueText, val, "{0:P0}"));
         if (autoSpeedSlider) autoSpeedSlider.onValueChanged.AddListener(val => UpdateSliderText(autoSpeedValueText, val, "{0:F1}s"));
         if (masterVolumeSlider) masterVolumeSlider.onValueChanged.AddListener(val => UpdateSliderText(masterVolumeValueText, val, "{0:P0}"));
         if (bgmVolumeSlider) bgmVolumeSlider.onValueChanged.AddListener(val => UpdateSliderText(bgmVolumeValueText, val, "{0:P0}"));
@@ -166,6 +170,8 @@ public class ConfigPanelController : MonoBehaviour
         {
             resolutionDropdown.AddOptions(new List<string> { "1920x1080", "1280x720", "Text Window Only" });
         }
+
+        SetupLanguageDropdown();
 
         ApplySettings(); // Apply settings on startup
 
@@ -241,8 +247,7 @@ public class ConfigPanelController : MonoBehaviour
         // Update Header
         if (headerText)
         {
-            string[] headers = { "基本設定", "テキスト設定", "サウンド設定", "グラフィック設定", "API設定" };
-            if (index >= 0 && index < headers.Length) headerText.text = headers[index];
+            headerText.text = GetLocalizedCategoryHeader(index);
         }
 
         // Switch Pages
@@ -307,12 +312,15 @@ public class ConfigPanelController : MonoBehaviour
 
     private void LoadSettings()
     {
+        currentLanguageIndex = PlayerPrefs.GetInt(PREF_LANGUAGE, 0);
+
         // Add safe checks and defaults
         if (skipLoadingToggle) skipLoadingToggle.isOn = PlayerPrefs.GetInt(PREF_SKIP_LOADING, 0) == 1;
         if (rightClickMenuToggle) rightClickMenuToggle.isOn = PlayerPrefs.GetInt(PREF_RIGHT_CLICK_MENU, 1) == 1;
+        if (languageDropdown) languageDropdown.SetValueWithoutNotify(currentLanguageIndex);
         
-        if (textSpeedSlider) { textSpeedSlider.value = PlayerPrefs.GetFloat(PREF_TEXT_SPEED, 1.0f); UpdateSliderText(textSpeedValueText, textSpeedSlider.value, "x{0:F1}"); }
-        if (textSpeedSlider) { textSpeedSlider.value = PlayerPrefs.GetFloat(PREF_TEXT_SPEED, 1.0f); UpdateSliderText(textSpeedValueText, textSpeedSlider.value, "x{0:F1}"); }
+        if (textSpeedSlider) { textSpeedSlider.value = PlayerPrefs.GetFloat(PREF_TEXT_SPEED, 1.0f); UpdateSliderText(textSpeedValueText, textSpeedSlider.value, "{0:P0}"); }
+        if (textSpeedSlider) { textSpeedSlider.value = PlayerPrefs.GetFloat(PREF_TEXT_SPEED, 1.0f); UpdateSliderText(textSpeedValueText, textSpeedSlider.value, "{0:P0}"); }
         if (autoSpeedSlider) { autoSpeedSlider.value = PlayerPrefs.GetFloat(PREF_AUTO_SPEED, 3.0f); UpdateSliderText(autoSpeedValueText, autoSpeedSlider.value, "{0:F1}s"); }
         if (autoModeToggle) autoModeToggle.isOn = PlayerPrefs.GetInt(PREF_AUTO_MODE, 0) == 1; // Load Auto Mode
 
@@ -367,6 +375,7 @@ public class ConfigPanelController : MonoBehaviour
         if (vertexUseGcloudToggle) vertexUseGcloudToggle.isOn = PlayerPrefs.GetInt("Config_VertexUseGcloud", 0) == 1;
 
         UpdateVertexFieldsVisibility(currentApiProviderIndex);
+        ApplyConfigLanguage(currentLanguageIndex);
     }
 
     public void OnApiProviderChanged(int newIndex)
@@ -426,6 +435,7 @@ public class ConfigPanelController : MonoBehaviour
     {
         if (skipLoadingToggle) PlayerPrefs.SetInt(PREF_SKIP_LOADING, skipLoadingToggle.isOn ? 1 : 0);
         if (rightClickMenuToggle) PlayerPrefs.SetInt(PREF_RIGHT_CLICK_MENU, rightClickMenuToggle.isOn ? 1 : 0);
+        PlayerPrefs.SetInt(PREF_LANGUAGE, languageDropdown ? languageDropdown.value : currentLanguageIndex);
         
         if (textSpeedSlider) PlayerPrefs.SetFloat(PREF_TEXT_SPEED, textSpeedSlider.value);
         if (textSpeedSlider) PlayerPrefs.SetFloat(PREF_TEXT_SPEED, textSpeedSlider.value);
@@ -527,6 +537,7 @@ public class ConfigPanelController : MonoBehaviour
     private void OnSaveClicked()
     {
         SaveSettings();
+        ApplyConfigLanguage(languageDropdown ? languageDropdown.value : currentLanguageIndex);
         Hide();
         onCloseCallback?.Invoke();
     }
@@ -557,5 +568,188 @@ public class ConfigPanelController : MonoBehaviour
         if (panelCanvasGroup) panelCanvasGroup.alpha = end;
         if (disableOnFinish) gameObject.SetActive(false);
         if (restoreOutlines) UpdateSidebarVisuals(); // Re-enable active outline after fade
+    }
+
+    private void SetupLanguageDropdown()
+    {
+        if (languageDropdown == null)
+        {
+            var pageGeneral = (categoryPages != null && categoryPages.Count > 0) ? categoryPages[0] : null;
+            if (pageGeneral != null)
+            {
+                var dropdownTf = pageGeneral.transform.Find("Row_DisplayLanguage/Dropdown_DisplayLanguage");
+                if (dropdownTf != null) languageDropdown = dropdownTf.GetComponent<TMP_Dropdown>();
+
+                var labelTf = pageGeneral.transform.Find("Row_DisplayLanguage/Label");
+                if (labelTf != null) languageLabelText = labelTf.GetComponent<TextMeshProUGUI>();
+            }
+        }
+
+        if (languageDropdown == null)
+        {
+            Debug.LogWarning("ConfigPanelController: languageDropdown is not assigned. Place Row_DisplayLanguage in ConfigPanel/Page_General and assign references in inspector.");
+            return;
+        }
+
+        languageDropdown.onValueChanged.RemoveListener(OnLanguageDropdownChanged);
+        currentLanguageIndex = PlayerPrefs.GetInt(PREF_LANGUAGE, 0);
+        RefreshLanguageDropdownOptions();
+        languageDropdown.SetValueWithoutNotify(currentLanguageIndex);
+        languageDropdown.onValueChanged.AddListener(OnLanguageDropdownChanged);
+        ApplyConfigLanguage(currentLanguageIndex);
+    }
+
+    private void OnLanguageDropdownChanged(int index)
+    {
+        currentLanguageIndex = index;
+        ApplyConfigLanguage(index);
+    }
+
+    private void RefreshLanguageDropdownOptions()
+    {
+        if (languageDropdown == null) return;
+
+        int keepIndex = Mathf.Clamp(currentLanguageIndex, 0, 1);
+        languageDropdown.ClearOptions();
+        // Always show "日本語" and "English" regardless of current language
+        languageDropdown.AddOptions(new List<string> { "日本語", "English" });
+        languageDropdown.SetValueWithoutNotify(keepIndex);
+    }
+
+    private string GetLocalizedCategoryHeader(int index)
+    {
+        bool en = currentLanguageIndex == 1;
+        switch (index)
+        {
+            case 0: return en ? "General" : "基本設定";
+            case 1: return en ? "Text" : "テキスト設定";
+            case 2: return en ? "Sound" : "サウンド設定";
+            case 3: return en ? "Graphics" : "グラフィック設定";
+            case 4: return en ? "API" : "API設定";
+            default: return en ? "Config" : "設定";
+        }
+    }
+
+    private void ApplyConfigLanguage(int languageIndex)
+    {
+        currentLanguageIndex = Mathf.Clamp(languageIndex, 0, 1);
+        bool toEnglish = currentLanguageIndex == 1;
+
+        RefreshLanguageDropdownOptions();
+
+        if (languageLabelText != null)
+        {
+            languageLabelText.text = toEnglish ? "Display Language" : "表示言語";
+        }
+
+        if (headerText != null)
+        {
+            headerText.text = GetLocalizedCategoryHeader(activeCategoryIndex);
+        }
+
+        UpdateCategoryButtonTexts(toEnglish);
+        UpdateCommonButtonTexts(toEnglish);
+        UpdateConfigLabelTexts(toEnglish);
+
+        // Notify other panels to refresh their language-dependent strings (names, etc)
+        var chat = FindObjectOfType<AmadeusChatController>(true);
+        if (chat != null) chat.UpdateLanguage();
+
+        var backLog = FindObjectOfType<BackLogController>(true);
+        if (backLog != null) backLog.UpdateLanguage();
+
+        var changeLog = FindObjectOfType<ChangeLogPanelController>(true);
+        if (changeLog != null) changeLog.UpdateLanguage();
+
+        var help = FindObjectOfType<HelpPanelController>(true);
+        if (help != null) help.UpdateLanguage();
+
+        var status = FindObjectOfType<StatusPanelController>(true);
+        if (status != null) status.UpdateLanguage();
+    }
+
+    private void UpdateCategoryButtonTexts(bool toEnglish)
+    {
+        if (categoryButtons == null) return;
+
+        string[] ja = { "基本設定", "テキスト設定", "サウンド設定", "グラフィック設定", "API設定" };
+        string[] en = { "General", "Text", "Sound", "Graphics", "API" };
+
+        for (int i = 0; i < categoryButtons.Count && i < ja.Length; i++)
+        {
+            if (categoryButtons[i] == null) continue;
+            var tmp = categoryButtons[i].GetComponentInChildren<TextMeshProUGUI>(true);
+            if (tmp != null) tmp.text = toEnglish ? en[i] : ja[i];
+        }
+    }
+
+    private void UpdateCommonButtonTexts(bool toEnglish)
+    {
+        if (saveButton != null)
+        {
+            var tmp = saveButton.GetComponentInChildren<TextMeshProUGUI>(true);
+            if (tmp != null) tmp.text = toEnglish ? "Apply" : "適用";
+        }
+
+        if (cancelButton != null)
+        {
+            var tmp = cancelButton.GetComponentInChildren<TextMeshProUGUI>(true);
+            if (tmp != null) tmp.text = toEnglish ? "Cancel" : "キャンセル";
+        }
+    }
+
+    private void UpdateConfigLabelTexts(bool toEnglish)
+    {
+        var map = new Dictionary<string, string>
+        {
+            { "起動画面スキップ", "Skip Loading Screen" },
+            { "右クリックメニュー", "Right Click Menu" },
+            { "文字表示速度", "Text Speed" },
+            { "オート表示", "Auto Mode" },
+            { "オート待機時間", "Auto Wait Time" },
+            { "マスター音量", "Master Volume" },
+            { "BGM音量", "BGM Volume" },
+            { "SE音量", "SE Volume" },
+            { "ボイス音量", "Voice Volume" },
+            { "画面モード", "Screen Mode" },
+            { "解像度", "Resolution" },
+            { "LLM APIプロバイダ", "LLM API Provider" },
+            { "LLM モデル名", "LLM Model Name" },
+            { "LLM Web検索", "LLM Web Search" },
+            { "※ Vertexを使用するためには、gCloud CLIのインストールが必要です。", "* gCloud CLI is required to use Vertex." }
+        };
+
+        var texts = GetComponentsInChildren<TextMeshProUGUI>(true);
+        foreach (var tmp in texts)
+        {
+            if (tmp == null || string.IsNullOrEmpty(tmp.text)) continue;
+
+            if (toEnglish)
+            {
+                if (map.TryGetValue(tmp.text, out string enText))
+                    tmp.text = enText;
+            }
+            else
+            {
+                foreach (var kv in map)
+                {
+                    if (tmp.text == kv.Value)
+                    {
+                        tmp.text = kv.Key;
+                        break;
+                    }
+                }
+            }
+        }
+
+        if (screenModeDropdown != null)
+        {
+            int idx = screenModeDropdown.value;
+            screenModeDropdown.ClearOptions();
+            screenModeDropdown.AddOptions(toEnglish
+                ? new List<string> { "Fullscreen", "Windowed", "Borderless" }
+                : new List<string> { "フルスクリーン", "ウィンドウ", "ボーダーレス" });
+            screenModeDropdown.SetValueWithoutNotify(Mathf.Clamp(idx, 0, screenModeDropdown.options.Count - 1));
+        }
     }
 }

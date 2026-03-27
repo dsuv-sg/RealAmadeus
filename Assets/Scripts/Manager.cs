@@ -11,13 +11,18 @@ public class Manager : MonoBehaviour
     public GameObject loginPanel;
     public GameObject loadingPanel;
     public GameObject mainPanel;
+    public TextMeshProUGUI loginErrorText;
+    public TMP_FontAsset loginErrorFont;
 
     private const string PREF_OPERATOR_NAME = "Config_OperatorName";
+    private const string ACCESS_DENIED_TEXT = "ACCESS DENIED";
 
     // Start is called once before the first execution of Update after the MonoBehaviour is created
     void Start()
     {
         loginPanel.SetActive(true);
+        EnsureLoginErrorText();
+        SetLoginErrorVisible(false);
     }
 
     // Update is called once per frame
@@ -25,6 +30,14 @@ public class Manager : MonoBehaviour
     {
         if(loginPanel.gameObject.activeSelf == true && Keyboard.current != null && Keyboard.current.enterKey.wasPressedThisFrame)
         {
+            // NEW: Prevent login via Enter if the menu is open (Unity parity/guard)
+            var menu = FindObjectOfType<MenuPanelController>();
+            if (menu != null && menu.IsMenuOpen)
+            {
+                Debug.Log("Login via Enter blocked: Menu is open.");
+                return;
+            }
+
             Debug.Log("Enter Login Successful");
             OnLoginButtonPressed();
         }
@@ -34,9 +47,10 @@ public class Manager : MonoBehaviour
         if (loginIdInputField.text == loginId && passwordInputField.text == password)
         {
             Debug.Log("Login Successful");
+            SetLoginErrorVisible(false);
 
             // Save operator name from login input
-            string operatorName = loginIdInputField.text;
+            string operatorName = "Salieri";
             PlayerPrefs.SetString(PREF_OPERATOR_NAME, operatorName);
             PlayerPrefs.Save();
             UpdateOperatorDisplay(operatorName);
@@ -47,7 +61,7 @@ public class Manager : MonoBehaviour
         else
         {
             Debug.Log("Login Failed");
-            // ログイン失敗時の処理をここに追加
+            SetLoginErrorText(ACCESS_DENIED_TEXT);
         }
     }
 
@@ -73,9 +87,56 @@ public class Manager : MonoBehaviour
         if (loginPanel != null)
         {
             loginPanel.SetActive(true);
+            SetLoginErrorVisible(false);
             // Clear inputs
             if (loginIdInputField != null) loginIdInputField.text = "";
             if (passwordInputField != null) passwordInputField.text = "";
+        }
+    }
+
+private void EnsureLoginErrorText()
+    {
+        if (loginErrorText == null) return;
+
+        TMP_FontAsset resolvedFont = loginErrorFont != null ? loginErrorFont : loginErrorText.font;
+        if (resolvedFont == null) resolvedFont = TMP_Settings.defaultFontAsset;
+
+        if (resolvedFont != null)
+        {
+            loginErrorText.font = resolvedFont;
+        }
+
+        loginErrorText.fontSize = 20f;
+        loginErrorText.fontStyle = FontStyles.Bold;
+        loginErrorText.color = new Color(1f, 0f, 0f, 1f);
+        loginErrorText.alignment = TextAlignmentOptions.Center;
+        loginErrorText.enableWordWrapping = false;
+        loginErrorText.overflowMode = TextOverflowModes.Overflow;
+        loginErrorText.raycastTarget = false;
+        loginErrorText.text = ACCESS_DENIED_TEXT;
+
+        // Ensure it is rendered above other login UI elements.
+        loginErrorText.transform.SetAsLastSibling();
+    }
+
+    private void SetLoginErrorText(string message)
+    {
+        EnsureLoginErrorText();
+        if (loginErrorText == null) return;
+
+        loginErrorText.text = message;
+        loginErrorText.gameObject.SetActive(true);
+    }
+
+    private void SetLoginErrorVisible(bool isVisible)
+    {
+        if (loginErrorText == null)
+        {
+            EnsureLoginErrorText();
+        }
+        if (loginErrorText != null)
+        {
+            loginErrorText.gameObject.SetActive(isVisible);
         }
     }
 

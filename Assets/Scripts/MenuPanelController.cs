@@ -31,6 +31,13 @@ public class MenuPanelController : MonoBehaviour
     public Image statusImage;
     public Image changeLogImage;
     public Image helpImage;
+    
+    [Header("Menu Texts (BACKLOG/CONFIG/STATUS/CHANGELOG/HELP)")]
+    public TextMeshProUGUI backlogText;
+    public TextMeshProUGUI configText;
+    public TextMeshProUGUI statusText;
+    public TextMeshProUGUI changeLogText;
+    public TextMeshProUGUI helpText;
 
     [Header("Menu Selected Sprites")]
     public Sprite backlogSelectedSprite;
@@ -92,7 +99,41 @@ public class MenuPanelController : MonoBehaviour
             menuCanvasGroup.gameObject.SetActive(true);
         }
         
+        // Auto-setup Mouse buttons (Static linking)
+        LinkButton(backlogImage?.gameObject, OnBackLogBtn);
+        LinkButton(configImage?.gameObject, OnConfigBtn);
+        LinkButton(statusImage?.gameObject, OnStatusBtn);
+        LinkButton(changeLogImage?.gameObject, OnChangeLogBtn);
+        LinkButton(helpImage?.gameObject, OnHelpBtn);
+
+        LinkButton(backlogText?.gameObject, OnBackLogBtn);
+        LinkButton(configText?.gameObject, OnConfigBtn);
+        LinkButton(statusText?.gameObject, OnStatusBtn);
+        LinkButton(changeLogText?.gameObject, OnChangeLogBtn);
+        LinkButton(helpText?.gameObject, OnHelpBtn);
+
+        LinkButton(fullscreenText?.gameObject, OnFullscreenBtn);
+        LinkButton(logoutText?.gameObject, OnLogoutBtn);
+        LinkButton(shutdownText?.gameObject, OnExitBtn);
+        LinkButton(closeMenuText?.gameObject, OnCloseMenuBtn);
+
         UpdateVisuals();
+    }
+
+    private void LinkButton(GameObject go, UnityEngine.Events.UnityAction action)
+    {
+        if (go == null) return;
+        Button btn = go.GetComponent<Button>();
+        if (btn != null)
+        {
+            btn.onClick.RemoveAllListeners();
+            btn.onClick.AddListener(action);
+            btn.transition = Selectable.Transition.None;
+        }
+        
+        // Ensure Text/Icon is raycast target
+        Graphic g = go.GetComponent<Graphic>();
+        if (g != null) g.raycastTarget = true;
     }
 
     public bool IsAnySubPanelOpen
@@ -261,6 +302,13 @@ public class MenuPanelController : MonoBehaviour
         SetImageState(statusImage, statusDefaultSprite, statusSelectedSprite, selectedIndex == 2);
         SetImageState(changeLogImage, changeLogDefaultSprite, changeLogSelectedSprite, selectedIndex == 4);
         SetImageState(helpImage, helpDefaultSprite, helpSelectedSprite, selectedIndex == 6);
+        
+        // Update Text Colors for main items
+        SetTextState(backlogText, selectedIndex == 0);
+        SetTextState(configText, selectedIndex == 1);
+        SetTextState(statusText, selectedIndex == 2);
+        SetTextState(changeLogText, selectedIndex == 4);
+        SetTextState(helpText, selectedIndex == 6);
 
         SetTextState(fullscreenText, selectedIndex == 3);
         if (fullscreenText != null)
@@ -304,6 +352,25 @@ public class MenuPanelController : MonoBehaviour
             case 8: OnCloseMenu(); break;
         }
     }
+
+    // --- Mouse Interaction Handlers ---
+    public void OnMenuItemClicked(int index)
+    {
+        if (!IsMenuOpen) return;
+        selectedIndex = index;
+        UpdateVisuals();
+        ExecuteSelection();
+    }
+
+    public void OnBackLogBtn() => OnMenuItemClicked(0);
+    public void OnConfigBtn() => OnMenuItemClicked(1);
+    public void OnStatusBtn() => OnMenuItemClicked(2);
+    public void OnFullscreenBtn() => OnMenuItemClicked(3);
+    public void OnChangeLogBtn() => OnMenuItemClicked(4);
+    public void OnLogoutBtn() => OnMenuItemClicked(5);
+    public void OnHelpBtn() => OnMenuItemClicked(6);
+    public void OnExitBtn() => OnMenuItemClicked(7);
+    public void OnCloseMenuBtn() => OnMenuItemClicked(8);
 
     public void Show()
     {
@@ -438,7 +505,7 @@ public class MenuPanelController : MonoBehaviour
         Debug.Log("Exit System Request");
         if (confirmationDialog != null)
         {
-            confirmationDialog.Show("ゲームを終了しますか？",
+            confirmationDialog.Show(GetExitConfirmMessage(),
                 () => { 
                     Debug.Log("Exiting...");
                     Application.Quit();
@@ -461,7 +528,7 @@ public class MenuPanelController : MonoBehaviour
          Debug.Log("Logout Request");
          if (confirmationDialog != null)
          {
-             confirmationDialog.Show("ログアウトしますか？",
+             confirmationDialog.Show(GetLogoutConfirmMessage(),
                 () => {
                     Debug.Log("Logging out...");
                     if (manager != null) manager.Logout();
@@ -485,5 +552,17 @@ public class MenuPanelController : MonoBehaviour
         {
             systemPanelController.Maximize();
         }
+    }
+
+    private string GetLogoutConfirmMessage()
+    {
+        bool en = PlayerPrefs.GetInt("Config_Language", 0) == 1;
+        return en ? "Do you want to log out?" : "ログアウトしますか？";
+    }
+
+    private string GetExitConfirmMessage()
+    {
+        bool en = PlayerPrefs.GetInt("Config_Language", 0) == 1;
+        return en ? "Do you want to exit Real Amadeus?" : "リアルアマデウスを終了しますか？";
     }
 }

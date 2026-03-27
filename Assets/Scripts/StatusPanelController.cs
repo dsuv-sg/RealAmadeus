@@ -50,6 +50,12 @@ public class StatusPanelController : MonoBehaviour
         }
         gameObject.SetActive(false);
 
+        if (closeButton == null)
+        {
+            Transform btn = transform.Find("Btn_Close");
+            if (btn != null) closeButton = btn.GetComponent<Button>();
+        }
+
         if (closeButton) closeButton.onClick.AddListener(OnCloseClicked);
 
         // Init Diagnostics
@@ -247,5 +253,55 @@ public class StatusPanelController : MonoBehaviour
 
         if (panelCanvasGroup) panelCanvasGroup.alpha = end;
         if (disableOnFinish) gameObject.SetActive(false);
+    }
+
+    /// <summary>
+    /// Refreshes the text content based on the current language setting.
+    /// </summary>
+    public void UpdateLanguage()
+    {
+        bool isEn = PlayerPrefs.GetInt("Config_Language", 0) == 1;
+
+        // Note: Labels like 'OPERATOR', 'CLOCK', 'NETWORK' are usually on separate Text components
+        // or as part of the dynamic string.
+        // Let's translate the static labels found in the hierarchy.
+        
+        var map = new System.Collections.Generic.Dictionary<string, string>
+        {
+            { "閉じる", "Close" },
+            { "CLOCK", "CLOCK" },
+            { "CPU", "CPU" },
+            { "MEMORY", "MEMORY" },
+            { "SYNCHRONIZATION", "SYNC" },
+            { "LLM_MODEL", "LLM_MODEL" },
+            { "AVERAGE_LATENCY", "LATENCY" },
+            { "LIVE2D_MODEL", "LIVE2D_MODEL" },
+            { "OPERATOR", "OPERATOR" },
+            { "NETWORK", "NETWORK" }
+        };
+
+        var texts = GetComponentsInChildren<TMPro.TextMeshProUGUI>(true);
+        foreach (var tmp in texts)
+        {
+            if (tmp == null || string.IsNullOrEmpty(tmp.text)) continue;
+            
+            string currentText = tmp.text.Trim();
+            if (isEn)
+            {
+                if (map.TryGetValue(currentText, out string enText))
+                    tmp.text = enText;
+            }
+            else
+            {
+                foreach (var kv in map)
+                {
+                    if (currentText == kv.Value)
+                    {
+                        tmp.text = kv.Key;
+                        break;
+                    }
+                }
+            }
+        }
     }
 }

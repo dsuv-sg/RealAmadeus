@@ -49,6 +49,33 @@ public class ConfirmationDialog : MonoBehaviour
          gameObject.SetActive(false);
     }
 
+    void Start()
+    {
+        SetupButtons();
+    }
+
+    private void SetupButtons()
+    {
+        if (yesButtonImage != null)
+        {
+            Button btn = yesButtonImage.GetComponent<Button>();
+            if (btn != null)
+            {
+                btn.onClick.RemoveAllListeners();
+                btn.onClick.AddListener(OnYes);
+            }
+        }
+        if (noButtonImage != null)
+        {
+            Button btn = noButtonImage.GetComponent<Button>();
+            if (btn != null)
+            {
+                btn.onClick.RemoveAllListeners();
+                btn.onClick.AddListener(OnNo);
+            }
+        }
+    }
+
     public void Show(string message, Action onYes, Action onNo)
     {
         messageText.text = message;
@@ -95,6 +122,8 @@ public class ConfirmationDialog : MonoBehaviour
 
     private void HandleInput()
     {
+        if (Keyboard.current == null) return;
+
         // Navigation (Left/Right)
         // Swap: Left Arrow -> No (isYesSelected = false)
         if (Keyboard.current.aKey.wasPressedThisFrame || Keyboard.current.leftArrowKey.wasPressedThisFrame)
@@ -121,9 +150,15 @@ public class ConfirmationDialog : MonoBehaviour
                 OnNo();
             }
         }
+
+        // Cancel with Backspace (same as selecting "No")
+        if (Keyboard.current.backspaceKey.wasPressedThisFrame)
+        {
+            OnNo();
+        }
     }
 
-    private void OnYes()
+    public void OnYes()
     {
         // Hide(); // Moved to inside actions to allow animation if needed, but here simple hide is ok
         // Fade out then action? Or action immediately?
@@ -133,7 +168,7 @@ public class ConfirmationDialog : MonoBehaviour
         onYesAction?.Invoke();
     }
 
-    private void OnNo()
+    public void OnNo()
     {
         Hide();
         onNoAction?.Invoke();
