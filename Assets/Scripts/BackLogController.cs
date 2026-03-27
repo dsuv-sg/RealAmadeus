@@ -354,6 +354,16 @@ public class BackLogController : MonoBehaviour
             string namePrefix = GetNameForRole(role, isEn);
             tmp.text = $"<b>{namePrefix}</b>";
         }
+
+        // Update Close button text
+        if (closeButton != null)
+        {
+            var closeButtonText = closeButton.GetComponentInChildren<TextMeshProUGUI>();
+            if (closeButtonText != null)
+            {
+                closeButtonText.text = isEn ? "Close" : "閉じる";
+            }
+        }
     }
 
     private string GetNameForRole(string role, bool isEn)

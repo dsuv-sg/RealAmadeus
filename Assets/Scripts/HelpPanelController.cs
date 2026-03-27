@@ -3,6 +3,7 @@ using System.Collections;
 using UnityEngine;
 using UnityEngine.UI;
 using UnityEngine.InputSystem;
+using TMPro;
 
 public class HelpPanelController : MonoBehaviour
 {
@@ -147,6 +148,16 @@ public class HelpPanelController : MonoBehaviour
                         break;
                     }
                 }
+            }
+        }
+
+        // Update Close button text (direct update like BackLogController)
+        if (closeButton != null)
+        {
+            var closeButtonText = closeButton.GetComponentInChildren<TextMeshProUGUI>();
+            if (closeButtonText != null)
+            {
+                closeButtonText.text = isEn ? "Close" : "閉じる";
             }
         }
     }

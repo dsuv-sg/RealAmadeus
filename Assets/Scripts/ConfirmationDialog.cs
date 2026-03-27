@@ -92,6 +92,7 @@ public class ConfirmationDialog : MonoBehaviour
         }
 
         gameObject.SetActive(true);
+        UpdateLanguage();
         UpdateVisuals();
 
         // Fade In
@@ -187,6 +188,13 @@ public class ConfirmationDialog : MonoBehaviour
             if (yesButtonText) yesButtonText.color = isYesSelected ? textSelectedColor : textNormalColor;
             if (noButtonText) noButtonText.color = !isYesSelected ? textSelectedColor : textNormalColor;
         }
+    }
+
+    public void UpdateLanguage()
+    {
+        bool isEn = PlayerPrefs.GetInt("Config_Language", 0) == 1;
+        if (yesButtonText != null) yesButtonText.text = isEn ? "Yes" : "はい";
+        if (noButtonText != null) noButtonText.text = isEn ? "No" : "いいえ";
     }
 
     private void CreateBorderLines()

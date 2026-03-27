@@ -3,6 +3,7 @@ using System.Collections;
 using UnityEngine;
 using UnityEngine.UI;
 using UnityEngine.InputSystem;
+using TMPro;
 
 public class ChangeLogPanelController : MonoBehaviour
 {
@@ -116,7 +117,10 @@ public class ChangeLogPanelController : MonoBehaviour
             { "GPU使用率が異常に高くなってしまう問題を修正しました。\nフルスクリーン状態での最小化時に、ウィンドウが異常に小さくなってしまう問題を修正しました。\nログアウト後の再ログインが不可能になってしまう問題を修正しました。\n一部AIサービスの利用時にて、感情タグが表示されてしまう問題を修正しました。", 
               "- Fixed an issue where GPU usage was abnormally high.\n- Fixed a window scaling issue when minimizing in fullscreen.\n- Fixed an issue where re-logging in after logout was impossible.\n- Fixed a bug where emotion tags were appearing for some AI services." },
             { "リアルアマデウスの最初のバージョンをリリースしました。\n基本的な会話機能のみを備えています。", 
-              "- Released the first version of Real Amadeus.\n- Includes basic conversation features." }
+              "- Released the first version of Real Amadeus.\n- Includes basic conversation features." },
+            // V1.1 (2026-03-27) - Qt版のテキスト（改行含む）
+            { "メニュー画面のクリック選択を実装しました。\n日本語/英語の言語切り替えを実装しました。\n各種画面に[閉じる/キャンセル/適用]ボタンを実装しました。\nチェンジログ/バックログ用に、スクロールバーを実装しました。\n視認性の向上のため、UIのデザインの一部を変更しました。\n軽量化版(QT版)のリリースを開始しました。",
+              "- Implemented click selection for the menu screen.\n- Added language switching between Japanese and English.\n- Added [Close/Cancel/Apply] buttons to various screens.\n- Implemented scrollbars for ChangeLog and BackLog.\n- Updated UI elements for better visibility.\n- Started release of the lightweight version." }
         };
 
         var texts = GetComponentsInChildren<TMPro.TextMeshProUGUI>(true);
@@ -147,6 +151,16 @@ public class ChangeLogPanelController : MonoBehaviour
                         break;
                     }
                 }
+            }
+        }
+
+        // Update Close button text (direct update like BackLogController)
+        if (closeButton != null)
+        {
+            var closeButtonText = closeButton.GetComponentInChildren<TextMeshProUGUI>();
+            if (closeButtonText != null)
+            {
+                closeButtonText.text = isEn ? "Close" : "閉じる";
             }
         }
     }
