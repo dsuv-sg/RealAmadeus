@@ -3,6 +3,7 @@ using UnityEngine;
 using TMPro;
 using UnityEngine.UI;
 using UnityEngine.InputSystem;
+using UnityEngine.EventSystems;
 
 public class ConfirmationDialog : MonoBehaviour
 {
@@ -12,6 +13,7 @@ public class ConfirmationDialog : MonoBehaviour
     public Image noButtonImage;
     public TextMeshProUGUI yesButtonText;
     public TextMeshProUGUI noButtonText;
+    public TMP_FontAsset koreanFont;
     public CanvasGroup canvasGroup;
     public Image dialogBox; // Added for Outline target
     public Image borderImage; // Added for outline // Added for fade
@@ -29,6 +31,7 @@ public class ConfirmationDialog : MonoBehaviour
 
     private Action onYesAction;
     private Action onNoAction;
+    private TMP_FontAsset originalFont;
     
     // true = Yes, false = No
     private bool isYesSelected = false; 
@@ -51,6 +54,7 @@ public class ConfirmationDialog : MonoBehaviour
 
     void Start()
     {
+        if (messageText != null) originalFont = messageText.font;
         SetupButtons();
     }
 
@@ -64,6 +68,13 @@ public class ConfirmationDialog : MonoBehaviour
                 btn.onClick.RemoveAllListeners();
                 btn.onClick.AddListener(OnYes);
             }
+            EventTrigger trigger = yesButtonImage.GetComponent<EventTrigger>();
+            if (trigger == null) trigger = yesButtonImage.gameObject.AddComponent<EventTrigger>();
+            trigger.triggers.Clear();
+            EventTrigger.Entry entry = new EventTrigger.Entry();
+            entry.eventID = EventTriggerType.PointerEnter;
+            entry.callback.AddListener((data) => { isYesSelected = true; UpdateVisuals(); });
+            trigger.triggers.Add(entry);
         }
         if (noButtonImage != null)
         {
@@ -73,12 +84,20 @@ public class ConfirmationDialog : MonoBehaviour
                 btn.onClick.RemoveAllListeners();
                 btn.onClick.AddListener(OnNo);
             }
+            EventTrigger trigger = noButtonImage.GetComponent<EventTrigger>();
+            if (trigger == null) trigger = noButtonImage.gameObject.AddComponent<EventTrigger>();
+            trigger.triggers.Clear();
+            EventTrigger.Entry entry = new EventTrigger.Entry();
+            entry.eventID = EventTriggerType.PointerEnter;
+            entry.callback.AddListener((data) => { isYesSelected = false; UpdateVisuals(); });
+            trigger.triggers.Add(entry);
         }
     }
 
     public void Show(string message, Action onYes, Action onNo)
     {
-        messageText.text = message;
+        int langIdx = PlayerPrefs.GetInt("Config_Language", 0);
+        messageText.text = GetSpacingTaggedText(message, langIdx);
         onYesAction = onYes;
         onNoAction = onNo;
         
@@ -192,9 +211,60 @@ public class ConfirmationDialog : MonoBehaviour
 
     public void UpdateLanguage()
     {
-        bool isEn = PlayerPrefs.GetInt("Config_Language", 0) == 1;
-        if (yesButtonText != null) yesButtonText.text = isEn ? "Yes" : "はい";
-        if (noButtonText != null) noButtonText.text = isEn ? "No" : "いいえ";
+        int langIdx = PlayerPrefs.GetInt("Config_Language", 0);
+        string[] yesArray = { "はい", "Yes", "是", "예", "Sí", "Oui", "Ja", "Да" };
+        string[] noArray = { "いいえ", "No", "否", "아니오", "No", "Non", "Nein", "Нет" };
+        
+        int idx = Mathf.Clamp(langIdx, 0, 7);
+        if (yesButtonText != null) yesButtonText.text = GetSpacingTaggedText(yesArray[idx], idx);
+        if (noButtonText != null) noButtonText.text = GetSpacingTaggedText(noArray[idx], idx);
+    }
+
+    private string GetCharType(char c, int lang)
+    {
+        int code = c;
+        if (code >= 0xAC00 && code <= 0xD7AF) return "hangul";
+        if (code >= 0x1100 && code <= 0x11FF) return "hangul";
+        if (code >= 0x3130 && code <= 0x318F) return "hangul";
+        if (lang == 7 && code >= 0x0400 && code <= 0x04FF) return "cyrillic";
+        return "other";
+    }
+
+    private string GetSpacingTaggedText(string text, int lang)
+    {
+        if (string.IsNullOrEmpty(text)) return text;
+
+        var result = new System.Text.StringBuilder();
+        string currentType = "";
+        var currentText = new System.Text.StringBuilder();
+
+        System.Action flush = () => {
+            if (currentText.Length == 0) return;
+            string run = currentText.ToString();
+            if (currentType == "cyrillic" && lang == 7)
+            {
+                result.Append("<cspace=-8.4px>").Append(run).Append("</cspace>");
+            }
+            else
+            {
+                result.Append(run);
+            }
+            currentText.Clear();
+        };
+
+        foreach (char c in text)
+        {
+            string type = GetCharType(c, lang);
+            if (type != currentType && currentText.Length > 0)
+            {
+                flush();
+            }
+            if (currentText.Length == 0) currentType = type;
+            currentText.Append(c);
+        }
+        flush();
+
+        return result.ToString();
     }
 
     private void CreateBorderLines()

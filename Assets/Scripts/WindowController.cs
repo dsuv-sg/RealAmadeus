@@ -19,9 +19,13 @@ public class WindowController : MonoBehaviour, IPointerDownHandler
     private const int SWP_NOMOVE       = 0x0002;
     private const int SWP_NOSIZE       = 0x0001;
     private const int SWP_FRAMECHANGED = 0x0020;
+    private const int SWP_NOACTIVATE   = 0x0010;
 
     private const int SW_SHOWMINIMIZED = 2;
     private const int SW_SHOWMAXIMIZED = 3;
+
+    private static readonly IntPtr HWND_BOTTOM = new IntPtr(1);
+    private static readonly IntPtr HWND_NOTOPMOST = new IntPtr(-2);
 
     [DllImport("user32.dll")] static extern IntPtr GetActiveWindow();
     [DllImport("user32.dll")] static extern int GetWindowLong(IntPtr hWnd, int nIndex);
@@ -36,12 +40,25 @@ public class WindowController : MonoBehaviour, IPointerDownHandler
     [DllImport("user32.dll")] static extern bool ShowWindow(IntPtr hWnd, int nCmdShow);
 
     private bool _wasMinimized = false;
+    private int _lastDesktopBackgroundValue = -1;
 
     void Awake()
     {
         Application.targetFrameRate = 60; // Limit FPS to reduce GPU usage
 #if !UNITY_EDITOR
         ApplyBorderlessStyle();
+        ApplyDesktopBackgroundMode();
+#endif
+    }
+
+    void Update()
+    {
+#if !UNITY_EDITOR
+        int current = PlayerPrefs.GetInt("Config_Experimental_DesktopBackgroundMode", 0);
+        if (current != _lastDesktopBackgroundValue)
+        {
+            ApplyDesktopBackgroundMode();
+        }
 #endif
     }
 
@@ -64,7 +81,20 @@ public class WindowController : MonoBehaviour, IPointerDownHandler
             IntPtr hwnd = GetActiveWindow();
             ShowWindow(hwnd, SW_SHOWMAXIMIZED);
             ApplyBorderlessStyle();
+            ApplyDesktopBackgroundMode();
         }
+    }
+#endif
+
+#if !UNITY_EDITOR
+    private void ApplyDesktopBackgroundMode()
+    {
+        _lastDesktopBackgroundValue = PlayerPrefs.GetInt("Config_Experimental_DesktopBackgroundMode", 0);
+        IntPtr hwnd = GetActiveWindow();
+        bool desktopMode = _lastDesktopBackgroundValue == 1;
+        uint flags = SWP_NOMOVE | SWP_NOSIZE | SWP_FRAMECHANGED | SWP_NOACTIVATE;
+        SetWindowPos(hwnd, desktopMode ? HWND_BOTTOM : HWND_NOTOPMOST, 0, 0, 0, 0, flags);
+        Application.runInBackground = desktopMode;
     }
 #endif
 

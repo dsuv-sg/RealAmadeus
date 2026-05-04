@@ -67,8 +67,12 @@ public class MenuPanelController : MonoBehaviour
 
     private Coroutine currentFadeCoroutine;
 
-    /// <summary>Returns true when the menu is visible (alpha >= 0.95).</summary>
-    public bool IsMenuOpen => menuCanvasGroup != null && menuCanvasGroup.alpha >= 0.95f;
+    /// <summary>
+    /// Returns true while the menu is in open state (set immediately in Show/Hide).
+    /// Matches the Qt behavior where menuOpen toggles at open/close boundaries.
+    /// </summary>
+    public bool IsMenuOpen => isMenuOpen;
+    private bool isMenuOpen = false;
 
     // 0:BACKLOG, 1:CONFIG, 2:STATUS, 3:FULLSCREEN, 4:CHANGELOG, 
     // 5:LOGOUT, 6:HELP, 7:SHUTDOWN, 8:CLOSEMENU
@@ -356,7 +360,7 @@ public class MenuPanelController : MonoBehaviour
     // --- Mouse Interaction Handlers ---
     public void OnMenuItemClicked(int index)
     {
-        if (!IsMenuOpen) return;
+        if (!IsMenuOpen || menuCanvasGroup == null || menuCanvasGroup.alpha < 0.95f) return;
         selectedIndex = index;
         UpdateVisuals();
         ExecuteSelection();
@@ -375,6 +379,7 @@ public class MenuPanelController : MonoBehaviour
     public void Show()
     {
         if (menuCanvasGroup == null) return;
+        isMenuOpen = true;
         menuCanvasGroup.gameObject.SetActive(true);
         if (currentFadeCoroutine != null) StopCoroutine(currentFadeCoroutine);
         currentFadeCoroutine = StartCoroutine(FadeCanvasGroup(0f, 1f));
@@ -390,6 +395,7 @@ public class MenuPanelController : MonoBehaviour
     public void Hide()
     {
         if (menuCanvasGroup == null) return;
+        isMenuOpen = false;
         if (currentFadeCoroutine != null) StopCoroutine(currentFadeCoroutine);
         currentFadeCoroutine = StartCoroutine(FadeCanvasGroup(menuCanvasGroup.alpha, 0f, true));
         
@@ -556,13 +562,27 @@ public class MenuPanelController : MonoBehaviour
 
     private string GetLogoutConfirmMessage()
     {
-        bool en = PlayerPrefs.GetInt("Config_Language", 0) == 1;
-        return en ? "Do you want to log out?" : "ログアウトしますか？";
+        int lang = PlayerPrefs.GetInt("Config_Language", 0);
+        if (lang == 1) return "Do you want to log out?";
+        if (lang == 2) return "您确定要登出吗？";
+        if (lang == 3) return "로그아웃하시겠습니까?";
+        if (lang == 4) return "¿Quieres cerrar sesión?";
+        if (lang == 5) return "Voulez-vous vous déconnecter?";
+        if (lang == 6) return "Möchten Sie sich abmelden?";
+        if (lang == 7) return "Вы хотите выйти?";
+        return "ログアウトしますか？";
     }
 
     private string GetExitConfirmMessage()
     {
-        bool en = PlayerPrefs.GetInt("Config_Language", 0) == 1;
-        return en ? "Do you want to exit Real Amadeus?" : "リアルアマデウスを終了しますか？";
+        int lang = PlayerPrefs.GetInt("Config_Language", 0);
+        if (lang == 1) return "Do you want to exit Real Amadeus?";
+        if (lang == 2) return "要退出Real Amadeus吗？";
+        if (lang == 3) return "Real Amadeus를 종료하시겠습니까?";
+        if (lang == 4) return "¿Quieres salir de Real Amadeus?";
+        if (lang == 5) return "Voulez-vous quitter Real Amadeus?";
+        if (lang == 6) return "Möchten Sie Real Amadeus beenden?";
+        if (lang == 7) return "Вы хотите выйти из Real Amadeus?";
+        return "リアルアマデウスを終了しますか？";
     }
 }

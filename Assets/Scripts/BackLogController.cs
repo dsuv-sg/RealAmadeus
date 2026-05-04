@@ -55,7 +55,7 @@ public class BackLogController : MonoBehaviour
 
         if (closeButton == null)
         {
-            Transform btn = transform.Find("Btn_Close");
+            Transform btn = FindDeepChild(transform, "Btn_Close");
             if (btn != null) closeButton = btn.GetComponent<Button>();
         }
 
@@ -158,8 +158,8 @@ public class BackLogController : MonoBehaviour
         if (string.IsNullOrWhiteSpace(cleanMessage)) return;
 
         // Determine display info
-        bool isEn = PlayerPrefs.GetInt("Config_Language", 0) == 1;
-        string namePrefix = GetNameForRole(role, isEn);
+        int langIdx = PlayerPrefs.GetInt("Config_Language", 0);
+        string namePrefix = GetNameForRole(role, langIdx);
         Color nameColor;
         switch (role.ToLower())
         {
@@ -330,18 +330,14 @@ public class BackLogController : MonoBehaviour
         le.preferredHeight = Mathf.Max(le.minHeight, preferred.y + verticalPadding);
     }
 
-    /// <summary>
-    /// Refreshes the display names of all existing log entries based on Config_Language.
-    /// </summary>
     public void UpdateLanguage()
     {
         if (contentContainer == null) return;
 
-        bool isEn = PlayerPrefs.GetInt("Config_Language", 0) == 1;
+        int langIdx = PlayerPrefs.GetInt("Config_Language", 0);
 
         foreach (Transform child in contentContainer)
         {
-            // Extract role from GameObject name "LogEntry_{role}"
             string role = child.name.StartsWith("LogEntry_") ? child.name.Substring(9) : "";
             if (string.IsNullOrEmpty(role)) continue;
 
@@ -351,29 +347,77 @@ public class BackLogController : MonoBehaviour
             var tmp = nameTf.GetComponent<TextMeshProUGUI>();
             if (tmp == null) continue;
 
-            string namePrefix = GetNameForRole(role, isEn);
-            tmp.text = $"<b>{namePrefix}</b>";
+            string namePrefix = GetNameForRole(role, langIdx);
+            tmp.text = $"<b>{GetSpacingTaggedText(namePrefix, langIdx)}</b>";
         }
 
-        // Update Close button text
-        if (closeButton != null)
+        var closeButtonText = ResolveCloseButtonText();
+        if (closeButtonText != null)
         {
-            var closeButtonText = closeButton.GetComponentInChildren<TextMeshProUGUI>();
-            if (closeButtonText != null)
-            {
-                closeButtonText.text = isEn ? "Close" : "閉じる";
-            }
+            string Close_JA = "閉じる", Close_EN = "Close", Close_ZH = "关闭", Close_KO = "닫기", Close_ES = "Cerrar", Close_FR = "Fermer", Close_DE = "Schließen", Close_RU = "Закрыть";
+            if (langIdx == 1) closeButtonText.text = Close_EN;
+            else if (langIdx == 2) closeButtonText.text = Close_ZH;
+            else if (langIdx == 3) closeButtonText.text = Close_KO;
+            else if (langIdx == 4) closeButtonText.text = Close_ES;
+            else if (langIdx == 5) closeButtonText.text = Close_FR;
+            else if (langIdx == 6) closeButtonText.text = Close_DE;
+            else if (langIdx == 7) closeButtonText.text = GetSpacingTaggedText(Close_RU, langIdx);
+            else closeButtonText.text = Close_JA;
         }
     }
 
-    private string GetNameForRole(string role, bool isEn)
+    private TextMeshProUGUI ResolveCloseButtonText()
     {
+        if (closeButton == null)
+        {
+            Transform btn = FindDeepChild(transform, "Btn_Close");
+            if (btn != null) closeButton = btn.GetComponent<Button>();
+        }
+
+        if (closeButton == null) return null;
+        return closeButton.GetComponentInChildren<TextMeshProUGUI>(true);
+    }
+
+    private Transform FindDeepChild(Transform parent, string targetName)
+    {
+        if (parent == null) return null;
+        if (parent.name == targetName) return parent;
+
+        for (int i = 0; i < parent.childCount; i++)
+        {
+            Transform found = FindDeepChild(parent.GetChild(i), targetName);
+            if (found != null) return found;
+        }
+
+        return null;
+    }
+
+    private string GetSpacingTaggedText(string text, int lang)
+    {
+        if (lang != 7 || string.IsNullOrEmpty(text)) return text;
+        return System.Text.RegularExpressions.Regex.Replace(text, @"([\u0400-\u04FF]+)", "<cspace=-8.4px>$1</cspace>");
+    }
+
+    private string GetNameForRole(string role, int langIdx)
+    {
+        string getTr(string ja, string en, string zh, string ko, string es, string fr, string de, string ru)
+        {
+            if (langIdx == 1) return en;
+            if (langIdx == 2) return zh;
+            if (langIdx == 3) return ko;
+            if (langIdx == 4) return es;
+            if (langIdx == 5) return fr;
+            if (langIdx == 6) return de;
+            if (langIdx == 7) return ru;
+            return ja;
+        }
+
         switch (role.ToLower())
         {
             case "user": case "me":
-                return isEn ? "You" : "あなた";
+                return getTr("あなた", "You", "你", "당신", "Tú", "Vous", "Du", "Вы");
             case "assistant": case "kurisu": case "amadeus":
-                return isEn ? "Amadeus Kurisu" : "アマデウス紅莉栖";
+                return getTr("アマデウス紅莉栖", "Amadeus Kurisu", "阿玛迪斯·红莉栖", "아마데우스 쿠리스", "Amadeus Kurisu", "Amadeus Kurisu", "Amadeus Kurisu", "Амадеус Курису");
             default:
                 return role.ToUpper();
         }

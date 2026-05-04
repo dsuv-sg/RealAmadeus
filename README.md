@@ -49,3 +49,31 @@ Open CubismSdkForUnity-X-r.X.X.unitypackage and place it so that it becomes Asse
 This project is licensed under the **Creative Commons Attribution-NonCommercial 4.0 International License (CC BY-NC 4.0)**.
 Under this license, you are free to modify and share, but you **may not use the material for commercial purposes** and **must give appropriate credit**.
 Please see the [LICENSE](LICENSE) file for more details.
+
+## Native AI Features (Experimental)
+
+RealAmadeus now includes fully native TTS, STT, and RAG implementations that do **not** require Python servers.
+
+### Native TTS (Windows only)
+- Uses Windows SAPI5 (ISpVoice) via COM Interop
+- Zero external dependencies
+- Automatically initialized at startup via `NativeServicesBootstrap`
+
+### Native STT (Windows only)
+- **Default mode**: Windows 10 built-in `DictationRecognizer` (online/offline depending on Windows settings)
+- **GPU mode**: When `UseGPU` is enabled and `whisper.dll` + model file are present, uses Whisper.cpp for local GPU-accelerated inference (CUDA/Metal/DirectML)
+- Model file path resolution:
+  1. `StreamingAssets/whisper-base.bin`
+  2. `persistentDataPath/whisper-base.bin`
+  3. Executable directory
+
+### Native RAG
+- Lightweight BM25 + cosine scoring implemented purely in C#
+- No embedding server required
+- Optimized for Japanese and English text
+
+### Setup
+1. Open `Config → Experimental Features` in-game
+2. Enable `Native TTS`, `Native STT`, or `Native RAG`
+3. For GPU STT, build Whisper.cpp with CUDA/Metal and place `whisper.dll` + model file in one of the paths above
+4. Native services take priority over Python server modes when enabled

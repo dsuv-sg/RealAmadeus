@@ -35,7 +35,7 @@ public class HelpPanelController : MonoBehaviour
 
         if (closeButton == null)
         {
-            Transform btn = transform.Find("Btn_Close");
+            Transform btn = FindDeepChild(transform, "Btn_Close");
             if (btn != null) closeButton = btn.GetComponent<Button>();
         }
 
@@ -57,6 +57,7 @@ public class HelpPanelController : MonoBehaviour
     {
         onCloseCallback = onClose;
         gameObject.SetActive(true);
+        UpdateLanguage();
         
         // Reset scroll position
         if (contentScrollRect != null)
@@ -101,24 +102,73 @@ public class HelpPanelController : MonoBehaviour
         if (disableOnFinish) gameObject.SetActive(false);
     }
 
-    /// <summary>
-    /// Refreshes the text content based on the current language setting.
-    /// </summary>
     public void UpdateLanguage()
     {
-        bool isEn = PlayerPrefs.GetInt("Config_Language", 0) == 1;
+        int langIdx = PlayerPrefs.GetInt("Config_Language", 0);
 
-        // Translation Map
-        var map = new System.Collections.Generic.Dictionary<string, string>
+        string getTr(string ja, string en, string zh, string ko, string es, string fr, string de, string ru)
         {
-            { "閉じる", "Close" },
-            { "Tab / 右クリック", "Tab / Right Click" },
-            { "メニュー開閉", "Open/Close Menu" },
-            { "保存して閉じる", "Apply and Close" },
-            { "WASD / ↑←↓→", "WASD / Arrows" },
-            { "項目選択", "Navigate Items" },
-            { "決定 / 会話を進める", "Select / Advance Conv." }
-        };
+            if (langIdx == 1) return en;
+            if (langIdx == 2) return zh;
+            if (langIdx == 3) return ko;
+            if (langIdx == 4) return es;
+            if (langIdx == 5) return fr;
+            if (langIdx == 6) return de;
+            if (langIdx == 7) return ru;
+            return ja;
+        }
+
+        string Close_JA = "閉じる", Close_EN = "Close", Close_ZH = "关闭", Close_KO = "닫기", Close_ES = "Cerrar", Close_FR = "Fermer", Close_DE = "Schließen", Close_RU = "Закрыть";
+
+        var map = new System.Collections.Generic.Dictionary<string, string>();
+        void AddVariants(string translated, params string[] variants)
+        {
+            foreach (var variant in variants)
+            {
+                string key = Normalize(variant);
+                if (!map.ContainsKey(key))
+                {
+                    map[key] = translated;
+                }
+            }
+        }
+
+        AddVariants(
+            getTr("Tab / 右クリック", "Tab / Right Click", "Tab / 右键", "Tab / 우클릭", "Tab / Clic derecho", "Tab / Clic droit", "Tab / Rechtsklick", "Tab / Правый клик"),
+            "Tab / 右クリック", "Tab / Right Click", "Tab / 右键", "Tab / 우클릭", "Tab / Clic derecho", "Tab / Clic droit", "Tab / Rechtsklick", "Tab / Правый клик"
+        );
+        AddVariants(
+            getTr("メニュー開閉", "Toggle Menu", "打开/关闭菜单", "메뉴 열기/닫기", "Abrir/cerrar menú", "Ouvrir/fermer menu", "Menü umschalten", "Открыть/закрыть меню"),
+            "メニュー開閉", "Toggle Menu", "打开/关闭菜单", "메뉴 열기/닫기", "Abrir/cerrar menú", "Ouvrir/fermer menu", "Menü umschalten", "Открыть/закрыть меню"
+        );
+        AddVariants(
+            getTr("保存して閉じる", "Save and Close", "保存并关闭", "저장하고 닫기", "Guardar y cerrar", "Sauvegarder et fermer", "Speichern und schließen", "Сохранить и закрыть"),
+            "保存して閉じる", "Save and Close", "保存并关闭", "저장하고 닫기", "Guardar y cerrar", "Sauvegarder et fermer", "Speichern und schließen", "Сохранить и закрыть"
+        );
+        AddVariants(
+            getTr("項目選択", "Select Item", "选择项目", "항목 선택", "Seleccionar elemento", "Sélectionner", "Element auswählen", "Выбор элемента"),
+            "項目選択", "Select Item", "选择项目", "항목 선택", "Seleccionar elemento", "Sélectionner", "Element auswählen", "Выбор элемента"
+        );
+        AddVariants(
+            getTr("決定 / 会話を進める", "Confirm / Advance", "确认 / 推进对话", "결정 / 대화 진행", "Confirmar / Avanzar", "Confirmer / Avancer", "Bestätigen / Fortfahren", "Подтвердить / Продолжить"),
+            "決定 / 会話を進める", "Confirm / Advance", "确认 / 推进对话", "결정 / 대화 진행", "Confirmar / Avanzar", "Confirmer / Avancer", "Bestätigen / Fortfahren", "Подтвердить / Продолжить"
+        );
+        AddVariants(
+            getTr("保存して閉じる", "Apply and Close", "保存并关闭", "저장 후 닫기", "Guardar y cerrar", "Enregistrer et fermer", "Speichern und schließen", "Сохранить и закрыть"),
+            "保存して閉じる", "Apply and Close", "Save and Close", "保存并关闭", "저장 후 닫기", "Guardar y cerrar", "Enregistrer et fermer", "Speichern und schließen", "Сохранить и закрыть"
+        );
+        AddVariants(
+            getTr("WASD / ↑←↓→", "WASD / Arrows", "WASD / 方向键", "WASD / 화살표", "WASD / Flechas", "WASD / Flèches", "WASD / Pfeiltasten", "WASD / Стрелки"),
+            "WASD / ↑←↓→", "WASD / Arrows", "WASD / 方向键", "WASD / 화살표", "WASD / Flechas", "WASD / Flèches", "WASD / Pfeiltasten", "WASD / Стрелки"
+        );
+        AddVariants(
+            getTr("項目選択", "Navigate Items", "导航项目", "항목 탐색", "Navegar elementos", "Naviguer entre les éléments", "Elemente navigieren", "Навигация по пунктам"),
+            "項目選択", "Navigate Items", "Select Item", "导航项目", "항목 탐색", "Navegar elementos", "Naviguer entre les éléments", "Elemente navigieren", "Навигация по пунктам"
+        );
+        AddVariants(
+            getTr("決定 / 会話を進める", "Select / Advance Conv.", "确认 / 推进对话", "확인 / 대화 진행", "Seleccionar / Avanzar", "Sélectionner / Avancer", "Auswählen / Fortfahren", "Выбрать / Продолжить"),
+            "決定 / 会話を進める", "Select / Advance Conv.", "Confirm / Advance", "确认 / 推进对话", "확인 / 대화 진행", "Seleccionar / Avanzar", "Sélectionner / Avancer", "Auswählen / Fortfahren", "Выбрать / Продолжить"
+        );
 
         var texts = GetComponentsInChildren<TMPro.TextMeshProUGUI>(true);
         foreach (var tmp in texts)
@@ -127,44 +177,60 @@ public class HelpPanelController : MonoBehaviour
 
             string currentText = Normalize(tmp.text);
 
-            if (isEn)
+            foreach (var kv in map)
             {
-                foreach (var kv in map)
+                if (currentText == Normalize(kv.Key))
                 {
-                    if (currentText == Normalize(kv.Key))
-                    {
-                        tmp.text = kv.Value;
-                        break;
-                    }
-                }
-            }
-            else
-            {
-                foreach (var kv in map)
-                {
-                    if (currentText == Normalize(kv.Value))
-                    {
-                        tmp.text = kv.Key;
-                        break;
-                    }
+                    tmp.text = GetSpacingTaggedText(kv.Value, langIdx);
+                    break;
                 }
             }
         }
 
-        // Update Close button text (direct update like BackLogController)
-        if (closeButton != null)
+        var closeButtonText = ResolveCloseButtonText();
+        if (closeButtonText != null)
         {
-            var closeButtonText = closeButton.GetComponentInChildren<TextMeshProUGUI>();
-            if (closeButtonText != null)
-            {
-                closeButtonText.text = isEn ? "Close" : "閉じる";
-            }
+            closeButtonText.text = GetSpacingTaggedText(getTr(Close_JA, Close_EN, Close_ZH, Close_KO, Close_ES, Close_FR, Close_DE, Close_RU), langIdx);
         }
+    }
+
+    private TextMeshProUGUI ResolveCloseButtonText()
+    {
+        if (closeButton == null)
+        {
+            Transform btn = FindDeepChild(transform, "Btn_Close");
+            if (btn != null) closeButton = btn.GetComponent<Button>();
+        }
+
+        if (closeButton == null) return null;
+        return closeButton.GetComponentInChildren<TextMeshProUGUI>(true);
+    }
+
+    private Transform FindDeepChild(Transform parent, string targetName)
+    {
+        if (parent == null) return null;
+        if (parent.name == targetName) return parent;
+
+        for (int i = 0; i < parent.childCount; i++)
+        {
+            Transform found = FindDeepChild(parent.GetChild(i), targetName);
+            if (found != null) return found;
+        }
+
+        return null;
+    }
+
+    private string GetSpacingTaggedText(string text, int lang)
+    {
+        if (lang != 7 || string.IsNullOrEmpty(text)) return text;
+        return System.Text.RegularExpressions.Regex.Replace(text, @"([\u0400-\u04FF]+)", "<cspace=-8.4px>$1</cspace>");
     }
 
     private string Normalize(string s)
     {
         if (s == null) return "";
-        return s.Replace("\r\n", "\n").Replace("\r", "\n").Trim();
+        string normalized = s.Replace("\r\n", "\n").Replace("\r", "\n");
+        normalized = System.Text.RegularExpressions.Regex.Replace(normalized, "<.*?>", string.Empty);
+        return normalized.Trim();
     }
 }

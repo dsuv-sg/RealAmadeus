@@ -18,6 +18,9 @@ public class StatusPanelController : MonoBehaviour
     public TextMeshProUGUI llmInfoText; // [NEW] Displays Provider & Model
     public TextMeshProUGUI latencyText; // [NEW] Displays API Latency
     public TextMeshProUGUI networkText; // [NEW] Displays ONLINE or OFFLINE
+    public TextMeshProUGUI nativeTtsText; // [NEW] Displays Native TTS status
+    public TextMeshProUGUI nativeSttText; // [NEW] Displays Native STT status
+    public TextMeshProUGUI nativeRagText; // [NEW] Displays Native RAG status
 
     [Header("Dynamic Bars")]
     public Slider syncSlider;
@@ -52,7 +55,7 @@ public class StatusPanelController : MonoBehaviour
 
         if (closeButton == null)
         {
-            Transform btn = transform.Find("Btn_Close");
+            Transform btn = FindDeepChild(transform, "Btn_Close");
             if (btn != null) closeButton = btn.GetComponent<Button>();
         }
 
@@ -84,10 +87,36 @@ public class StatusPanelController : MonoBehaviour
                     }
                 }
             }
-            if (rt != null)
+        if (rt != null)
+        {
+            networkText = rt.GetComponent<TextMeshProUGUI>();
+        }
+    }
+
+        // Auto-link native feature status texts if missing
+        AutoLinkStatusText("Row_NATIVE_TTS", ref nativeTtsText);
+        AutoLinkStatusText("Row_NATIVE_STT", ref nativeSttText);
+        AutoLinkStatusText("Row_NATIVE_RAG", ref nativeRagText);
+    }
+
+    private void AutoLinkStatusText(string rowName, ref TextMeshProUGUI target)
+    {
+        if (target != null) return;
+        Transform row = transform.Find($"InfoGrid/LeftCol/{rowName}");
+        if (row == null) row = transform.Find($"InfoGrid/RightCol/{rowName}");
+        if (row == null) row = transform.Find(rowName);
+        if (row != null)
+        {
+            foreach (Transform child in row)
             {
-                networkText = rt.GetComponent<TextMeshProUGUI>();
+                if (child.name == "Text" && child.localPosition.x > 0)
+                {
+                    target = child.GetComponent<TextMeshProUGUI>();
+                    break;
+                }
             }
+            if (target == null)
+                target = row.GetComponentInChildren<TextMeshProUGUI>();
         }
     }
 
@@ -193,6 +222,47 @@ public class StatusPanelController : MonoBehaviour
                 networkText.text = "<color=#44FF44>ONLINE</color>";
             }
         }
+
+        // Native Feature Status
+        UpdateNativeFeatureStatus();
+    }
+
+    private void UpdateNativeFeatureStatus()
+    {
+        int lang = PlayerPrefs.GetInt("Config_Language", 0);
+        string on = lang == 0 ? "ON" : "ON";
+        string off = lang == 0 ? "OFF" : "OFF";
+        string gpu = lang == 0 ? "GPU" : "GPU";
+        string cpu = lang == 0 ? "CPU" : "CPU";
+
+        // Native TTS
+        if (nativeTtsText)
+        {
+            bool enabled = NativeTTSService.Instance != null && NativeTTSService.Instance.IsEnabled;
+            bool gpuCapable = enabled && NativeTTSService.Instance.UseGPU && NativeTTSService.Instance.IsGPUAvailable();
+            string status = enabled ? $"<color=#44FF44>{on}</color>" : $"<color=#FF4444>{off}</color>";
+            string gpuStatus = gpuCapable ? $" / <color=#44AAFF>{gpu}</color>" : (enabled ? $" / <color=#FFAA44>{cpu}</color>" : "");
+            nativeTtsText.text = $"TTS: {status}{gpuStatus}";
+        }
+
+        // Native STT
+        if (nativeSttText)
+        {
+            bool enabled = NativeSTTService.Instance != null && NativeSTTService.Instance.IsEnabled;
+            bool gpuCapable = enabled && NativeSTTService.Instance.UseGPU && NativeSTTService.Instance.IsWhisperAvailable();
+            string status = enabled ? $"<color=#44FF44>{on}</color>" : $"<color=#FF4444>{off}</color>";
+            string gpuStatus = gpuCapable ? $" / <color=#44AAFF>{gpu}</color>" : (enabled ? $" / <color=#FFAA44>{cpu}</color>" : "");
+            string recording = enabled && NativeSTTService.Instance.IsRecording ? " <color=#FF4444>[REC]</color>" : "";
+            nativeSttText.text = $"STT: {status}{gpuStatus}{recording}";
+        }
+
+        // Native RAG
+        if (nativeRagText)
+        {
+            bool enabled = NativeRAGService.Instance != null && NativeRAGService.Instance.IsEnabled;
+            string status = enabled ? $"<color=#44FF44>{on}</color>" : $"<color=#FF4444>{off}</color>";
+            nativeRagText.text = $"RAG: {status}";
+        }
     }
 
     public void UpdateLLMStats(string provider, string model, float latencyMs)
@@ -218,6 +288,9 @@ public class StatusPanelController : MonoBehaviour
     {
         onCloseCallback = onClose;
         gameObject.SetActive(true);
+        UpdateLanguage();
+        // Force immediate status refresh when panel opens
+        UpdateNativeFeatureStatus();
         if (currentFadeCoroutine != null) StopCoroutine(currentFadeCoroutine);
         currentFadeCoroutine = StartCoroutine(FadeCanvas(0f, 1f));
     }
@@ -260,48 +333,64 @@ public class StatusPanelController : MonoBehaviour
     /// </summary>
     public void UpdateLanguage()
     {
-        bool isEn = PlayerPrefs.GetInt("Config_Language", 0) == 1;
-
-        // Note: Labels like 'OPERATOR', 'CLOCK', 'NETWORK' are usually on separate Text components
-        // or as part of the dynamic string.
-        // Let's translate the static labels found in the hierarchy.
-        
-        var map = new System.Collections.Generic.Dictionary<string, string>
+        int langIdx = PlayerPrefs.GetInt("Config_Language", 0);
+        string getTr(string ja, string en, string zh, string ko, string es, string fr, string de, string ru)
         {
-            { "閉じる", "Close" },
-            { "CLOCK", "CLOCK" },
-            { "CPU", "CPU" },
-            { "MEMORY", "MEMORY" },
-            { "SYNCHRONIZATION", "SYNC" },
-            { "LLM_MODEL", "LLM_MODEL" },
-            { "AVERAGE_LATENCY", "LATENCY" },
-            { "LIVE2D_MODEL", "LIVE2D_MODEL" },
-            { "OPERATOR", "OPERATOR" },
-            { "NETWORK", "NETWORK" }
-        };
-
-        var texts = GetComponentsInChildren<TMPro.TextMeshProUGUI>(true);
-        foreach (var tmp in texts)
-        {
-            if (tmp == null || string.IsNullOrEmpty(tmp.text)) continue;
-            
-            string currentText = tmp.text.Trim();
-            if (isEn)
-            {
-                if (map.TryGetValue(currentText, out string enText))
-                    tmp.text = enText;
-            }
-            else
-            {
-                foreach (var kv in map)
-                {
-                    if (currentText == kv.Value)
-                    {
-                        tmp.text = kv.Key;
-                        break;
-                    }
-                }
-            }
+            if (langIdx == 1) return en;
+            if (langIdx == 2) return zh;
+            if (langIdx == 3) return ko;
+            if (langIdx == 4) return es;
+            if (langIdx == 5) return fr;
+            if (langIdx == 6) return de;
+            if (langIdx == 7) return ru;
+            return ja;
         }
+
+        string Close_JA = "閉じる";
+        string Close_EN = "Close";
+        string Close_ZH = "关闭";
+        string Close_KO = "닫기";
+        string Close_ES = "Cerrar";
+        string Close_FR = "Fermer";
+        string Close_DE = "Schließen";
+        string Close_RU = "Закрыть";
+
+        var closeButtonText = ResolveCloseButtonText();
+        if (closeButtonText != null)
+        {
+            closeButtonText.text = GetSpacingTaggedText(getTr(Close_JA, Close_EN, Close_ZH, Close_KO, Close_ES, Close_FR, Close_DE, Close_RU), langIdx);
+        }
+    }
+
+    private TextMeshProUGUI ResolveCloseButtonText()
+    {
+        if (closeButton == null)
+        {
+            Transform btn = FindDeepChild(transform, "Btn_Close");
+            if (btn != null) closeButton = btn.GetComponent<Button>();
+        }
+
+        if (closeButton == null) return null;
+        return closeButton.GetComponentInChildren<TextMeshProUGUI>(true);
+    }
+
+    private Transform FindDeepChild(Transform parent, string targetName)
+    {
+        if (parent == null) return null;
+        if (parent.name == targetName) return parent;
+
+        for (int i = 0; i < parent.childCount; i++)
+        {
+            Transform found = FindDeepChild(parent.GetChild(i), targetName);
+            if (found != null) return found;
+        }
+
+        return null;
+    }
+
+    private string GetSpacingTaggedText(string text, int lang)
+    {
+        if (lang != 7 || string.IsNullOrEmpty(text)) return text;
+        return System.Text.RegularExpressions.Regex.Replace(text, @"([\u0400-\u04FF]+)", "<cspace=-8.4px>$1</cspace>");
     }
 }

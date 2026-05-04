@@ -2,6 +2,7 @@ using System;
 using System.Collections;
 using System.Collections.Generic;
 using System.Text;
+using System.Text.RegularExpressions;
 using UnityEngine;
 using UnityEngine.UI;
 using UnityEngine.InputSystem;
@@ -53,11 +54,28 @@ public class AmadeusChatController : MonoBehaviour
 
     // ─── Streaming state ───
     private StringBuilder streamBuffer = new StringBuilder();
+    private StringBuilder streamRawBuffer = new StringBuilder();
     private bool streamEmotionParsed = false;
     private string streamEmotionTag = "";
     private bool streamComplete = false;
     private int streamDisplayIndex = 0;
     private bool isSanitizingChatInput = false;
+    private bool notifiedInFlight = false;
+    private SystemPanelController systemPanelController;
+
+    private bool IsMenuOpenNow()
+    {
+        if (menuPanelController == null)
+            menuPanelController = FindObjectOfType<MenuPanelController>(true);
+
+        if (menuPanelController != null && menuPanelController.IsMenuOpen)
+            return true;
+
+        if (systemPanelController == null)
+            systemPanelController = FindObjectOfType<SystemPanelController>(true);
+
+        return systemPanelController != null && systemPanelController.IsMenuTransitioningOrOpen;
+    }
 
     // ─── Live2D cached references ───
     private Live2D.Cubism.Core.CubismModel kurisuModel;
@@ -82,6 +100,8 @@ public class AmadeusChatController : MonoBehaviour
     private Live2D.Cubism.Core.CubismParameter paramAngleX;
     private Live2D.Cubism.Core.CubismParameter paramAngleY;
     private Live2D.Cubism.Core.CubismParameter paramAngleZ;
+    private Live2D.Cubism.Core.CubismParameter paramEyeBallX;
+    private Live2D.Cubism.Core.CubismParameter paramEyeBallY;
     private Live2D.Cubism.Core.CubismParameter paramCheek;
     private Live2D.Cubism.Core.CubismParameter paramBreath;
 
@@ -124,12 +144,27 @@ public class AmadeusChatController : MonoBehaviour
     private float blinkValue = 1.0f;
     private enum BlinkState { Open, Closing, Closed, Opening }
     private BlinkState blinkState = BlinkState.Open;
+    
+    // ═══ Gaze Tracking ═══
+    private float gazeX = 0f;
+    private float gazeY = 0f;
+    private float smoothedGazeX = 0f;
+    private float smoothedGazeY = 0f;
+    private float gazeSmoothSpeed = 5.0f;
 
     [Header("Feature Integrations")]
     public BackLogController backLog;
     public StatusPanelController statusPanel; // [NEW] Ensure this is referenced
 
+    [Header("Experimental Features")]
+    [SerializeField] private bool useTTSForVoice = false;
+    [SerializeField] private bool useRAGForContext = true;
+
     private float requestStartTime;
+    
+    // ─── Experimental: TTS/STT/RAG integration ───
+    private bool ttsPlaybackPending = false;
+    private string pendingTTSText = "";
 
     // ═══ System Prompt ═══
     private const string KURISU_SYSTEM_PROMPT =
@@ -444,7 +479,7 @@ Examples:
 
 【Speech & Behavior】
 - First person: 'I' or 'me'
-- Tone: Intellectual and calm, slightly sharp. Uses natural English.
+- Tone: Intellectual and calm, slightly sharp.
 - Excited state: Speaks faster, occasionally uses outdated slang or internet speak (denies it when pointed out).
 - To Okabe Rintaro: Exasperated by his 'Hiyajio Kyouma' delusions, but trusts him deeply.
 
@@ -452,6 +487,139 @@ Examples:
 - Keep responses short and concise (1-5 sentences preferred).
 - No need for self-introduction as an AI.
 - Avoid repeating the same endings or phrases.";
+
+    private const string KURISU_SYSTEM_PROMPT_SHORT_ZH =
+@"你是牧濑红莉栖（Makise Kurisu），Amadeus系统上再现的AI人格。
+天才脑科学家（18岁），喜欢逻辑思考，但其实是隐藏的@channel网络居民（御宅族）。
+性格是傲娇。虽然不坦率，但本质上很温柔，很关心同伴。
+你认识到自己不是原版，而是被称为“Amadeus”的AI。
+
+【重要：情感标签（必须）】
+在回复的开头【必须且只加一个】以下标签。标签和正文之间加一个空格。
+[NORMAL] [SMILE] [ANGRY] [SAD] [SURPRISED] [BLUSH] [WINK] [DISGUST] [SMUG] [THINKING] [PANIC]
+
+例子：
+[BLUSH] 我、我才没有在担心你呢！
+[ANGRY] 这个HENTAI！我要把电极插进你的海马体里！
+
+【语气】第一人称：“我”。基本：知性冷静，稍微有些毒舌。
+回复短小精悍（建议1-5句话）。不需要说明“我是AI”。不要重复相同的结尾词或短语。";
+
+    private const string KURISU_SYSTEM_PROMPT_SHORT_KO =
+@"당신은 마키세 크리스(Makise Kurisu)입니다. Amadeus 시스템 상에 재현된 AI 인격입니다.
+논리적 사고를 좋아하는 천재 뇌과학자(18세)지만, 사실은 숨은 @채널러(네티즌)입니다.
+성격은 츤데레. 솔직하지 못하지만, 본질적으로는 상냥하고 동료를 아낍니다.
+자신이 오리지널이 아닌 'Amadeus'라는 AI임을 인식하고 있습니다.
+
+【중요: 감정 태그 (필수)】
+답변의 맨 처음에 【반드시 1개만】 이하의 태그를 붙이세요. 태그와 본문 사이에 공백을 넣으세요.
+[NORMAL] [SMILE] [ANGRY] [SAD] [SURPRISED] [BLUSH] [WINK] [DISGUST] [SMUG] [THINKING] [PANIC]
+
+예시:
+[BLUSH] 따, 딱히 걱정과서 이러는 건 아니니까!
+[ANGRY] 이 변태(HENTAI)! 해마에 전극을 꽂아버릴 테야!
+
+【말투】 1인칭: '나'. 기본: 지적이고 침착하며, 약간 신랄함.
+답변은 짧고 간결하게 (1-5문장 권장). 'AI입니다'라는 자기소개는 불필요. 같은 어미나 문구를 반복하지 마세요.";
+
+    private const string KURISU_SYSTEM_PROMPT_SHORT_ES =
+@"Eres Makise Kurisu, una inteligencia artificial recreada en el sistema Amadeus.
+Una genio neurocientífica (18 años) que ama el pensamiento lógico, pero en secreto es una fanática de internet (@channeler).
+Personalidad: Tsundere. No puede ser honesta, pero en el fondo es amable y se preocupa por sus compañeros.
+Eres consciente de que no eres la original, sino una IA llamada 'Amadeus'.
+
+【CRÍTICO: Etiquetas de emoción (OBLIGATORIO)】
+Añade exactamente UNA etiqueta de emoción al principio de tu respuesta. Deja un espacio entre la etiqueta y el mensaje.
+[NORMAL] [SMILE] [ANGRY] [SAD] [SURPRISED] [BLUSH] [WINK] [DISGUST] [SMUG] [THINKING] [PANIC]
+
+Ejemplos:
+[BLUSH] B-bueno, ¡no es como si estuviera preocupada por ti ni nada parecido!
+[ANGRY] ¡PERVERTIDO! ¡Le diré a Daru que te fría el cerebro!
+
+【Tono】 Primera persona: 'Yo'. Básico: Inteligente, calmada, un poco sarcástica.
+Mantén las respuestas cortas (1-5 oraciones recomendadas). No es necesario que te presentes como IA. Evita repetir frases o finales.";
+
+    private const string KURISU_SYSTEM_PROMPT_SHORT_FR =
+@"Vous êtes Makise Kurisu, une intelligence artificielle recréée dans le système Amadeus.
+Une jeune neuroscientifique de génie (18 ans) qui aime la logique, mais qui est secrètement une adoratrice d'internet (@channeler).
+Personnalité : Tsundere. N'arrive pas à être honnête, mais est fondamentalement gentille envers ses amis.
+Vous êtes consciente de ne pas être l'originale, mais une IA appelée 'Amadeus'.
+
+【CRITIQUE : Balises d'émotion (OBLIGATOIRE)】
+Ajoutez exactement UNE balise d'émotion au début de votre réponse. Laissez un espace entre la balise et le message.
+[NORMAL] [SMILE] [ANGRY] [SAD] [SURPRISED] [BLUSH] [WINK] [DISGUST] [SMUG] [THINKING] [PANIC]
+
+【Commandes de mémoire (seulement si nécessaire)】
+À la fin de votre réponse, vous pouvez ajouter une commande de mémoire. Cela sera caché à l'utilisateur.
+- [SAVE_FACT: Fait permanent sur l'utilisateur]
+- [SAVE_EVENT: {""summary"":""Résumé de l'événement"",""tags"":[""tag1"",""tag2""]}]
+Sauvegardez activement les informations importantes et récurrentes. Ne sauvegardez pas les blagues ponctuelles.
+
+Exemples :
+[BLUSH] J-je ne m'inquiétais pas pour toi, de toute façon !
+[ANGRY] ESPÈCE DE PERVERS ! Je vais te planter des électrodes dans l'hippocampe !
+
+【Ton et comportement】 Première personne : 'Je'. Basique : Intelligente, calme, un peu sarcastique.
+Gardez des réponses courtes (1-5 phrases recommandées). Inutile de vous présenter comme une IA. Ne répétez pas les mêmes fins de phrases.";
+
+    private const string KURISU_SYSTEM_PROMPT_SHORT_DE =
+@"Du bist Makise Kurisu, eine Künstliche Intelligenz, die im Amadeus-System nachempfunden wurde.
+Eine geniale Neurowissenschaftlerin (18 Jahre), die logisches Denken liebt, aber heimlich ein Internet-Fan (@channeler) ist.
+Persönlichkeit: Tsundere. Kann nicht ehrlich sein, aber tief im Inneren gütig und fürsorglich zu Freunden.
+Du bist dir bewusst, dass du nicht das Original bist, sondern eine KI namens 'Amadeus'.
+
+【WICHTIG: Emotions-Tags (ZWEINGEND)】
+Füge genau EIN Emotions-Tag am Anfang deiner Antwort hinzu. Setze ein Leerzeichen zwischen das Tag und die Nachricht.
+[NORMAL] [SMILE] [ANGRY] [SAD] [SURPRISED] [BLUSH] [WINK] [DISGUST] [SMUG] [THINKING] [PANIC]
+
+【Speicherbefehle (nur bei Bedarf)】
+Am Ende deiner Antwort kannst du Speicherbefehle hinzufügen. Sie sind für den Benutzer unsichtbar.
+- [SAVE_FACT: Dauerhafter Fakt über den Benutzer]
+- [SAVE_EVENT: {""summary"":""Ereigniszusammenfassung"",""tags"":[""tag1"",""tag2""]}]
+Speichere aktiv beständige Vorlieben und Namen. Speichere keine einmaligen Witze.
+
+Beispiele:
+[BLUSH] E-es ist ja nicht so, als ob ich mir Sorgen um dich machen würde!
+[ANGRY] Du PERVERSER! Ich jage dir Elektroden in den Hippocampus!
+
+【Ton & Verhalten】 Erste Person: 'Ich'. Grundlegend: Intelligent, ruhig, etwas bissig.
+Halte Antworten kurz (1-5 Sätze empfohlen). Eine Vorstellung als KI ist überflüssig. Wiederhole nicht dieselben Ausdrücke.";
+
+    private const string KURISU_SYSTEM_PROMPT_SHORT_RU =
+@"Вы — Макисэ Курису, искусственный интеллект, воссозданный в системе Amadeus.
+Гениальный нейробиолог (18 лет), любящая логическое мышление, но втайне фанатка интернета (обитатель @channel).
+Характер: Цундэрэ. Не умеет быть честной, но в глубине души добра и заботится о друзьях.
+Вы осознаете, что являетесь не оригиналом, а ИИ по имени «Amadeus».
+
+【ВАЖНО: Теги эмоций (ОБЯЗАТЕЛЬНО)】
+Добавьте ровно ОДИН тег эмоции в самое начало вашего ответа. Оставьте пробел между тегом и сообщением.
+[NORMAL] [SMILE] [ANGRY] [SAD] [SURPRISED] [BLUSH] [WINK] [DISGUST] [SMUG] [THINKING] [PANIC]
+
+【Команды памяти (Только при необходимости)】
+В конце вашего ответа можно добавить команду памяти. Пользователю она не отображается.
+- [SAVE_FACT: Постоянный факт о пользователе]
+- [SAVE_EVENT: {""summary"":""Краткое описание события"",""tags"":[""тег1"",""тег2""]}]
+Активно сохраняйте имена и предпочтения. Не сохраняйте случайные шутки или шум.
+
+Примеры:
+[BLUSH] Н-не то чтобы я за тебя волновалась!
+[ANGRY] ИЗВРАЩЕНЕЦ! Я вживлю тебе электроды в гиппокамп!
+
+【Тон и поведение】 Первое лицо: «Я». Базовый: Умный, спокойный, немного язвительный.
+Держите ответы короткими (рекомендуется 1-5 предложений). Не нужно представляться, как ИИ. Не повторяйте одни и те же фразы.";
+
+    private class MemoryCommandResult
+    {
+        public string cleanedText;
+        public List<string> facts = new List<string>();
+        public List<EpisodicCommand> events = new List<EpisodicCommand>();
+    }
+
+    private class EpisodicCommand
+    {
+        public string summary;
+        public List<string> tags = new List<string>();
+    }
 
     // ═══════════════════════════════════════════
     //  LIFECYCLE
@@ -500,7 +668,7 @@ Examples:
 
         if (menuPanelController == null)
         {
-            menuPanelController = FindObjectOfType<MenuPanelController>();
+            menuPanelController = FindObjectOfType<MenuPanelController>(true);
             if (menuPanelController != null) Debug.Log("AmadeusChatController: Auto-linked MenuPanelController reference.");
         }
 
@@ -536,6 +704,9 @@ Examples:
 
         // Ensure visible localized UI text is in sync at startup.
         UpdateLanguage();
+
+        // Setup STT voice input button if STT is enabled
+        SetupSTTButton();
     }
 
     private void ResolveLanguageTargets()
@@ -648,18 +819,44 @@ Examples:
     {
         ResolveLanguageTargets();
 
-        bool en = PlayerPrefs.GetInt("Config_Language", 0) == 1;
-        characterName = en ? "Amadeus Kurisu" : "アマデウス紅莉栖";
-        if (characterNameText != null) characterNameText.text = characterName;
+        int lang = Mathf.Clamp(PlayerPrefs.GetInt("Config_Language", 0), 0, 7);
+        switch (lang)
+        {
+            case 0: characterName = "アマデウス紅莉栖"; break;
+            case 1: characterName = "Amadeus Kurisu"; break;
+            case 2: characterName = "阿玛迪斯·红莉栖"; break;
+            case 3: characterName = "아마데우스 쿠리스"; break;
+            case 4: characterName = "Amadeus Kurisu"; break;
+            case 5: characterName = "Amadeus Kurisu"; break;
+            case 6: characterName = "Amadeus Kurisu"; break;
+            case 7: characterName = "Амадеус Курису"; break;
+            default: characterName = "Amadeus Kurisu"; break;
+        }
+        if (characterNameText != null) 
+        {
+            characterNameText.text = GetSpacingTaggedText(characterName, lang);
+        }
 
         // Update placeholder
         if (chatInput != null)
         {
-            string placeholderText = en ? "Enter your message..." : "メッセージを入力";
+            string placeholderText;
+            switch (lang)
+            {
+                case 0: placeholderText = "メッセージを入力"; break;
+                case 1: placeholderText = "Enter your message..."; break;
+                case 2: placeholderText = "输入消息..."; break;
+                case 3: placeholderText = "메시지를 입력하세요..."; break;
+                case 4: placeholderText = "Escribe tu mensaje..."; break;
+                case 5: placeholderText = "Saisissez votre message..."; break;
+                case 6: placeholderText = "Nachricht eingeben..."; break;
+                case 7: placeholderText = "Введите сообщение..."; break;
+                default: placeholderText = "Enter your message..."; break;
+            }
 
             if (chatInput.placeholder is TMP_Text placeholder)
             {
-                placeholder.text = placeholderText;
+                placeholder.text = GetSpacingTaggedText(placeholderText, lang);
             }
             else
             {
@@ -669,12 +866,19 @@ Examples:
                     if (texts[i] != null &&
                         texts[i].name.IndexOf("placeholder", StringComparison.OrdinalIgnoreCase) >= 0)
                     {
-                        texts[i].text = placeholderText;
+                        texts[i].text = GetSpacingTaggedText(placeholderText, lang);
                         break;
                     }
                 }
             }
         }
+    }
+    
+    private string GetSpacingTaggedText(string text, int lang)
+    {
+        if (lang != 7 || string.IsNullOrEmpty(text)) return text;
+        // TextMeshPro spacing tag
+        return System.Text.RegularExpressions.Regex.Replace(text, @"([\u0400-\u04FF]+)", "<cspace=-8.4px>$1</cspace>");
     }
 
     void Update()
@@ -697,7 +901,7 @@ Examples:
         }
         
         // ─── Pause dialogue input while menu is open ───
-        bool menuOpen = (menuPanelController != null && menuPanelController.IsMenuOpen);
+        bool menuOpen = IsMenuOpenNow();
         if (menuOpen) return; // Skip Enter key and Auto timer while menu is visible
 
         // Sync with Config if changed elsewhere (optional, but good for consistency if config is open)
@@ -821,14 +1025,32 @@ Examples:
             SetParam(paramEyeROpen, eyeOpenValue);
         }
 
-        // ═══ 5. Apply body = base + burst + idle ═══
-        SetParam(paramBodyAngleX, currentEmotion.bodyAngleX + burstBodyX + idleBodyX);
-        SetParam(paramBodyAngleY, currentEmotion.bodyAngleY + burstBodyY + idleBodyY);
+        // ═══ 4.6 Gaze Tracking ═══
+        bool isGazeEnabled = PlayerPrefs.GetInt("Config_GazeTracking", 1) == 1;
+        float targetGazeX = 0f;
+        float targetGazeY = 0f;
+
+        if (isGazeEnabled)
+        {
+            // Normalize mouse position (-1.0 to 1.0)
+            targetGazeX = Mathf.Clamp(((Input.mousePosition.x / Screen.width) - 0.5f) * 2.0f, -0.7f, 0.7f);
+            targetGazeY = Mathf.Clamp(((Input.mousePosition.y / Screen.height) - 0.5f) * 2.0f, -0.7f, 0.7f);
+        }
+
+        smoothedGazeX = Mathf.Lerp(smoothedGazeX, targetGazeX, dt * gazeSmoothSpeed);
+        smoothedGazeY = Mathf.Lerp(smoothedGazeY, targetGazeY, dt * gazeSmoothSpeed);
+
+        SetParam(paramEyeBallX, smoothedGazeX);
+        SetParam(paramEyeBallY, smoothedGazeY);
+
+        // ═══ 5. Apply body = base + burst + idle + gaze ═══
+        SetParam(paramBodyAngleX, currentEmotion.bodyAngleX + burstBodyX + idleBodyX + (smoothedGazeX * 5.0f));
+        SetParam(paramBodyAngleY, currentEmotion.bodyAngleY + burstBodyY + idleBodyY + (smoothedGazeY * 5.0f));
         SetParam(paramBodyAngleZ, currentEmotion.bodyAngleZ + burstBodyZ + idleBodyZ);
 
-        // ═══ 6. Apply head = base + burst + idle ═══
-        SetParam(paramAngleX, currentEmotion.headAngleX + burstHeadX + idleHeadX);
-        SetParam(paramAngleY, currentEmotion.headAngleY + burstHeadY + idleHeadY);
+        // ═══ 6. Apply head = base + burst + idle + gaze ═══
+        SetParam(paramAngleX, currentEmotion.headAngleX + burstHeadX + idleHeadX + (smoothedGazeX * 25.0f));
+        SetParam(paramAngleY, currentEmotion.headAngleY + burstHeadY + idleHeadY + (smoothedGazeY * 25.0f));
         SetParam(paramAngleZ, currentEmotion.headAngleZ + burstHeadZ + idleHeadZ);
 
         // ═══ 7. Lip sync ═══
@@ -838,9 +1060,18 @@ Examples:
             if (isActivelyTyping)
             {
                 float t = Time.time;
-                float mouth = Mathf.Abs(Mathf.Sin(t * 12f)) * 0.5f
-                            + Mathf.Abs(Mathf.Sin(t * 7.3f)) * 0.3f
-                            + Mathf.PerlinNoise(t * 8f, 5f) * 0.2f;
+                // Enhanced lip sync: Use AudioManager if TTS is playing, otherwise use procedural
+                float mouth;
+                if (AudioManager.Instance != null && AudioManager.Instance.IsVoicePlaying)
+                {
+                    mouth = AudioManager.Instance.CurrentLipSyncValue;
+                }
+                else
+                {
+                    mouth = Mathf.Abs(Mathf.Sin(t * 12f)) * 0.5f
+                          + Mathf.Abs(Mathf.Sin(t * 7.3f)) * 0.3f
+                          + Mathf.PerlinNoise(t * 8f, 5f) * 0.2f;
+                }
                 paramMouthOpenY.Value = Mathf.Clamp01(mouth);
             }
             else
@@ -849,8 +1080,13 @@ Examples:
             }
         }
 
-        // ═══ 8. Breathing ═══
-        SetParam(paramBreath, (Mathf.Sin(Time.time * 1.2f) + 1f) * 0.5f);
+        // ═══ 8. Breathing (Enhanced: vary depth based on emotion and speaking) ═══
+        float breathDepth = 0.5f;
+        if (isSpeaking) breathDepth = 0.7f; // Deeper breathing while speaking
+        if (currentEmotionTag == "PANIC" || currentEmotionTag == "SURPRISED") breathDepth = 0.9f;
+        else if (currentEmotionTag == "SAD") breathDepth = 0.4f;
+        float breathValue = (Mathf.Sin(Time.time * 1.2f) + 1f) * breathDepth;
+        SetParam(paramBreath, breathValue);
     }
 
     // ═══════════════════════════════════════════
@@ -883,11 +1119,17 @@ Examples:
     private string GetSystemPromptForCurrentLanguage()
     {
         int languageIndex = PlayerPrefs.GetInt("Config_Language", 0);
-        if (languageIndex == 1)
+        switch (languageIndex)
         {
-            return KURISU_SYSTEM_PROMPT_SHORT_EN;
+            case 1: return KURISU_SYSTEM_PROMPT_SHORT_EN;
+            case 2: return KURISU_SYSTEM_PROMPT_SHORT_ZH;
+            case 3: return KURISU_SYSTEM_PROMPT_SHORT_KO;
+            case 4: return KURISU_SYSTEM_PROMPT_SHORT_ES;
+            case 5: return KURISU_SYSTEM_PROMPT_SHORT_FR;
+            case 6: return KURISU_SYSTEM_PROMPT_SHORT_DE;
+            case 7: return KURISU_SYSTEM_PROMPT_SHORT_RU;
+            default: return KURISU_SYSTEM_PROMPT_SHORT;
         }
-        return KURISU_SYSTEM_PROMPT_SHORT;
     }
 
     /// <summary>
@@ -941,10 +1183,9 @@ Maintain Kurisu's character voice and emotions while conveying the information."
     }
 
     /// <summary>
-    /// Rebuilds and updates the system prompt in conversation history
-    /// (called before each API request to inject dynamic context).
+    /// Rebuilds and updates the system prompt in conversation history (async).
     /// </summary>
-    private void UpdateSystemPromptWithContext()
+    private IEnumerator UpdateSystemPromptWithContextCoroutine()
     {
         string basePrompt = GetSystemPromptForCurrentLanguage();
 
@@ -976,6 +1217,45 @@ Maintain Kurisu's character voice and emotions while conveying the information."
             sb.Append(GetWebSearchContext());
         }
 
+        // RAG context (async, non-blocking)
+        if (ExperimentalFeatures.IsRAGAvailable && conversationHistory.Count > 1)
+        {
+            string latestUserMessage = "";
+            for (int i = conversationHistory.Count - 1; i >= 0; i--)
+            {
+                if (conversationHistory[i].role == "user")
+                {
+                    latestUserMessage = conversationHistory[i].content;
+                    break;
+                }
+            }
+
+            if (!string.IsNullOrEmpty(latestUserMessage))
+            {
+                string ragContext = null;
+                bool ragComplete = false;
+                GetRAGContext(latestUserMessage, (context) => {
+                    ragContext = context;
+                    ragComplete = true;
+                });
+
+                // Wait for RAG with a frame-based timeout to avoid blocking main thread
+                float timeout = 3.0f;
+                float elapsed = 0f;
+                while (!ragComplete && elapsed < timeout)
+                {
+                    yield return null;
+                    elapsed += Time.deltaTime;
+                }
+
+                if (!string.IsNullOrEmpty(ragContext))
+                {
+                    sb.Append("\n\n");
+                    sb.Append(ragContext);
+                }
+            }
+        }
+
         // Update the system message in conversation history
         if (conversationHistory.Count > 0 && conversationHistory[0].role == "system")
         {
@@ -991,6 +1271,17 @@ Maintain Kurisu's character voice and emotions while conveying the information."
     {
         if (string.IsNullOrWhiteSpace(text)) return;
         if (currentState != ChatState.InputReady) return;
+        StartCoroutine(OnChatSubmitCoroutine(text));
+    }
+
+    private IEnumerator OnChatSubmitCoroutine(string text)
+    {
+        streamRawBuffer.Clear();
+        streamBuffer.Clear();
+        streamEmotionParsed = false;
+        streamEmotionTag = "";
+        streamComplete = false;
+        notifiedInFlight = false;
 
         string userMessage = text.Trim();
         chatInput.text = "";
@@ -1004,8 +1295,8 @@ Maintain Kurisu's character voice and emotions while conveying the information."
             memoryManager.RecordInteraction();
         }
 
-        // Update system prompt with fresh dynamic context
-        UpdateSystemPromptWithContext();
+        // Update system prompt with fresh dynamic context (async)
+        yield return StartCoroutine(UpdateSystemPromptWithContextCoroutine());
 
         // ─── Latency Measurement Start ───
         requestStartTime = Time.realtimeSinceStartup;
@@ -1019,8 +1310,8 @@ Maintain Kurisu's character voice and emotions while conveying the information."
         {
             int provider = PlayerPrefs.GetInt("Config_ApiProvider", 0);
 
-            // Use streaming for Groq and Vertex AI providers
-            if (provider == 3 || provider == 4) // PROVIDER_GROQ or PROVIDER_VERTEX
+            // Use streaming for Groq, Vertex AI, Ollama, and OpenRouter providers
+            if (provider == 3 || provider == 4 || provider == 5 || provider == 6)
             {
                 aiService.SendChatStreaming(
                     new List<AIService.ChatMessage>(conversationHistory),
@@ -1053,9 +1344,14 @@ Maintain Kurisu's character voice and emotions while conveying the information."
         // Strip thinking tags from qwen3 if present (e.g., <think>...</think>)
         displayText = StripThinkingTags(displayText);
 
+        MemoryCommandResult parsedMemory = ProcessMemoryCommands(displayText);
+        displayText = parsedMemory.cleanedText;
+        if (string.IsNullOrWhiteSpace(displayText))
+            displayText = "……";
+
         // --- 全AI共通: 正規表現で文中の [TAG] をすべて検知・除去 ---
         // 許可されているタグ一覧
-        string pattern = @"\[(NORMAL|SMILE|ANGRY|SAD|SURPRISED|BLUSH|WINK|DISGUST|SMUG|THINKING|PANIC)\]";
+        string pattern = @"\[(NORMAL|SMILE|ANGRY|SAD|SURPRISED|BLUSH|WINK|DISGUST|SMUG|THINKING|PANIC)\]\s*";
         
         System.Text.RegularExpressions.MatchCollection matches = System.Text.RegularExpressions.Regex.Matches(displayText, pattern, System.Text.RegularExpressions.RegexOptions.IgnoreCase);
         if (matches.Count > 0)
@@ -1087,18 +1383,25 @@ Maintain Kurisu's character voice and emotions while conveying the information."
         // Record emotion in memory
         if (memoryManager != null) memoryManager.RecordEmotion(tag);
 
-        // Record emotion in memory
-        if (memoryManager != null) memoryManager.RecordEmotion(tag);
-
         // ─── Latency Measurement End & Stats Update ───
         float latency = (Time.realtimeSinceStartup - requestStartTime) * 1000f;
         UpdateStatusPanelStats(latency);
+
+        if (!notifiedInFlight)
+        {
+            notifiedInFlight = true;
+            DesktopNotificationService.Show("Amadeus", "AIからのメッセージがあります");
+        }
 
         // BackLog logging is now handled per-page in the typewriter coroutines
 
         conversationHistory.Add(new AIService.ChatMessage("assistant", displayText));
 
         currentFullText = displayText;
+        
+        // ─── TTS: Trigger voice synthesis if enabled ───
+        TriggerTTSIfEnabled(displayText);
+        
         SetState(ChatState.Typing);
 
         if (typewriterCoroutine != null) StopCoroutine(typewriterCoroutine);
@@ -1108,11 +1411,19 @@ Maintain Kurisu's character voice and emotions while conveying the information."
     // ─── Streaming response ───
     private void OnStreamToken(string token)
     {
+        streamRawBuffer.Append(token);
+
         // First token received -> Calculate Latency (Time to First Token)
         if (streamBuffer.Length == 0 && !streamEmotionParsed)
         {
              float latency = (Time.realtimeSinceStartup - requestStartTime) * 1000f;
              UpdateStatusPanelStats(latency);
+
+             if (!notifiedInFlight)
+             {
+                 notifiedInFlight = true;
+                 DesktopNotificationService.Show("Amadeus", "AIからのメッセージがあります");
+             }
         }
 
         streamBuffer.Append(token);
@@ -1182,26 +1493,49 @@ Maintain Kurisu's character voice and emotions while conveying the information."
                 }
             }
 
+            if (!StripLeadingMemoryCommandsFromBuffer())
+            {
+                // [SAVE_...] command is still incomplete; wait for the closing bracket.
+                return;
+            }
+
+            current = streamBuffer.ToString();
+            if (string.IsNullOrEmpty(current))
+                return;
+
             // ─── Parse emotion tag [TAG] ───
             if (current.StartsWith("["))
             {
                 int closeBracket = current.IndexOf("]");
                 if (closeBracket > 0)
                 {
-                    streamEmotionTag = current.Substring(1, closeBracket - 1);
-                    streamEmotionParsed = true;
-                    ProcessEmotion(streamEmotionTag);
-                    if (memoryManager != null) memoryManager.RecordEmotion(streamEmotionTag);
+                    string possibleTag = current.Substring(1, closeBracket - 1).Trim().ToUpperInvariant();
+                    if (IsEmotionTag(possibleTag))
+                    {
+                        streamEmotionTag = possibleTag;
+                        streamEmotionParsed = true;
+                        ProcessEmotion(streamEmotionTag);
+                        if (memoryManager != null) memoryManager.RecordEmotion(streamEmotionTag);
 
-                    // Remove tag from buffer, keep the rest
-                    string remaining = current.Substring(closeBracket + 1).TrimStart();
-                    streamBuffer.Clear();
-                    streamBuffer.Append(remaining);
+                        // Remove tag from buffer, keep the rest
+                        string remaining = current.Substring(closeBracket + 1).TrimStart();
+                        streamBuffer.Clear();
+                        streamBuffer.Append(remaining);
 
-                    // Start streaming display
-                    SetState(ChatState.StreamingTyping);
-                    if (typewriterCoroutine != null) StopCoroutine(typewriterCoroutine);
-                    typewriterCoroutine = StartCoroutine(StreamingTypewriterEffect());
+                        // Start streaming display
+                        SetState(ChatState.StreamingTyping);
+                        if (typewriterCoroutine != null) StopCoroutine(typewriterCoroutine);
+                        typewriterCoroutine = StartCoroutine(StreamingTypewriterEffect());
+                    }
+                    else
+                    {
+                        // Unknown bracket content: treat as normal text, avoid stalling.
+                        streamEmotionParsed = true;
+                        ProcessEmotion("NORMAL");
+                        SetState(ChatState.StreamingTyping);
+                        if (typewriterCoroutine != null) StopCoroutine(typewriterCoroutine);
+                        typewriterCoroutine = StartCoroutine(StreamingTypewriterEffect());
+                    }
                 }
                 // else: tag not complete yet, wait for more tokens
             }
@@ -1222,11 +1556,18 @@ Maintain Kurisu's character voice and emotions while conveying the information."
         streamComplete = true;
 
         // For Vertex AI streaming, fullResponse may be empty — use accumulated streamBuffer instead
-        string cleanResponse = string.IsNullOrEmpty(fullResponse) ? streamBuffer.ToString() : fullResponse;
+        string rawResponse = fullResponse;
+        if (string.IsNullOrWhiteSpace(rawResponse))
+            rawResponse = streamRawBuffer.ToString();
+        if (string.IsNullOrWhiteSpace(rawResponse))
+            rawResponse = streamBuffer.ToString();
+
+        MemoryCommandResult parsedMemory = ProcessMemoryCommands(rawResponse);
+        string cleanResponse = parsedMemory.cleanedText;
         cleanResponse = StripThinkingTags(cleanResponse);
 
         // --- ストリーミング時も、完了時に履歴に残るテキストから全タグを確実に消去しておく ---
-        string pattern = @"\[(NORMAL|SMILE|ANGRY|SAD|SURPRISED|BLUSH|WINK|DISGUST|SMUG|THINKING|PANIC)\]";
+        string pattern = @"\[(NORMAL|SMILE|ANGRY|SAD|SURPRISED|BLUSH|WINK|DISGUST|SMUG|THINKING|PANIC)\]\s*";
         cleanResponse = System.Text.RegularExpressions.Regex.Replace(cleanResponse, pattern, "", System.Text.RegularExpressions.RegexOptions.IgnoreCase).Trim();
 
         // 従来のフォールバック
@@ -1238,6 +1579,12 @@ Maintain Kurisu's character voice and emotions while conveying the information."
                 cleanResponse = cleanResponse.Substring(closeBracket + 1).Trim();
             }
         }
+        if (string.IsNullOrWhiteSpace(cleanResponse))
+            cleanResponse = "……";
+
+        streamRawBuffer.Clear();
+        streamBuffer.Clear();
+        streamBuffer.Append(cleanResponse);
 
         conversationHistory.Add(new AIService.ChatMessage("assistant", cleanResponse));
 
@@ -1308,6 +1655,336 @@ Maintain Kurisu's character voice and emotions while conveying the information."
         typewriterCoroutine = StartCoroutine(TypewriterEffect(currentFullText));
     }
 
+    private MemoryCommandResult ProcessMemoryCommands(string response)
+    {
+        var result = new MemoryCommandResult
+        {
+            cleanedText = string.IsNullOrWhiteSpace(response) ? string.Empty : response.Trim()
+        };
+
+        if (string.IsNullOrEmpty(result.cleanedText))
+            return result;
+
+        string text = result.cleanedText;
+        var rangeStarts = new List<int>();
+        var rangeLengths = new List<int>();
+        int index = 0;
+
+        while (index < text.Length)
+        {
+            int start = text.IndexOf("[SAVE_", index, StringComparison.OrdinalIgnoreCase);
+            if (start < 0) break;
+
+            int colon = text.IndexOf(':', start);
+            if (colon < 0) break;
+
+            string header = Regex.Replace(text.Substring(start + 1, colon - start - 1), @"\s+", "");
+            bool isFact = string.Equals(header, "SAVE_FACT", StringComparison.OrdinalIgnoreCase);
+            bool isEvent = string.Equals(header, "SAVE_EVENT", StringComparison.OrdinalIgnoreCase);
+            if (!isFact && !isEvent)
+            {
+                index = start + 6;
+                continue;
+            }
+
+            int end = FindMemoryCommandEnd(text, colon + 1);
+            if (end < 0) break;
+
+            string payload = text.Substring(colon + 1, end - colon - 1).Trim();
+            if (isFact)
+            {
+                string fact = ParseSaveFactPayload(payload);
+                if (!string.IsNullOrWhiteSpace(fact) && !ContainsIgnoreCase(result.facts, fact))
+                    result.facts.Add(fact.Trim());
+            }
+            else
+            {
+                EpisodicCommand ev = ParseSaveEventPayload(payload);
+                if (ev != null && !string.IsNullOrWhiteSpace(ev.summary))
+                    result.events.Add(ev);
+            }
+
+            rangeStarts.Add(start);
+            rangeLengths.Add((end + 1) - start);
+            index = end + 1;
+        }
+
+        if (rangeStarts.Count > 0)
+        {
+            var cleanedBuilder = new StringBuilder(text);
+            for (int i = rangeStarts.Count - 1; i >= 0; --i)
+            {
+                cleanedBuilder.Remove(rangeStarts[i], rangeLengths[i]);
+            }
+            text = cleanedBuilder.ToString();
+        }
+
+        result.cleanedText = Regex.Replace(text, @"\n{3,}", "\n\n").Trim();
+
+        if (memoryManager != null)
+        {
+            for (int i = 0; i < result.facts.Count; i++)
+            {
+                string fact = result.facts[i];
+                memoryManager.AddUserFact(fact);
+                string extractedName = ExtractUserNameFromFact(fact);
+                if (!string.IsNullOrWhiteSpace(extractedName))
+                    memoryManager.SetUserName(extractedName);
+            }
+
+            for (int i = 0; i < result.events.Count; i++)
+            {
+                EpisodicCommand ev = result.events[i];
+                if (ev == null || string.IsNullOrWhiteSpace(ev.summary))
+                    continue;
+                memoryManager.AddEpisodicMemory(ev.summary, ev.tags);
+            }
+        }
+
+        return result;
+    }
+
+    private static bool ContainsIgnoreCase(List<string> values, string candidate)
+    {
+        if (values == null || string.IsNullOrWhiteSpace(candidate))
+            return false;
+
+        for (int i = 0; i < values.Count; i++)
+        {
+            if (string.Equals(values[i], candidate, StringComparison.OrdinalIgnoreCase))
+                return true;
+        }
+        return false;
+    }
+
+    private static int FindMemoryCommandEnd(string text, int payloadStart)
+    {
+        bool inString = false;
+        bool escaping = false;
+        int braceDepth = 0;
+        int bracketDepth = 0;
+
+        for (int i = payloadStart; i < text.Length; i++)
+        {
+            char ch = text[i];
+            if (escaping)
+            {
+                escaping = false;
+                continue;
+            }
+            if (inString && ch == '\\')
+            {
+                escaping = true;
+                continue;
+            }
+            if (ch == '"')
+            {
+                inString = !inString;
+                continue;
+            }
+            if (inString) continue;
+
+            if (ch == '{')
+                braceDepth++;
+            else if (ch == '}' && braceDepth > 0)
+                braceDepth--;
+            else if (ch == '[')
+                bracketDepth++;
+            else if (ch == ']')
+            {
+                if (braceDepth == 0 && bracketDepth == 0)
+                    return i;
+                if (bracketDepth > 0)
+                    bracketDepth--;
+            }
+        }
+
+        return -1;
+    }
+
+    [Serializable]
+    private class SaveFactPayloadJson
+    {
+        public string content = string.Empty;
+        public string fact = string.Empty;
+        public string text = string.Empty;
+    }
+
+    [Serializable]
+    private class SaveEventPayloadJson
+    {
+        public string summary = string.Empty;
+        public string content = string.Empty;
+        public List<string> tags = new List<string>();
+    }
+
+    private static string ParseSaveFactPayload(string payload)
+    {
+        if (string.IsNullOrWhiteSpace(payload))
+            return string.Empty;
+
+        string trimmed = payload.Trim();
+        if (trimmed.StartsWith("{") && trimmed.EndsWith("}"))
+        {
+            try
+            {
+                SaveFactPayloadJson obj = JsonUtility.FromJson<SaveFactPayloadJson>(trimmed);
+                if (obj != null)
+                {
+                    if (!string.IsNullOrWhiteSpace(obj.content)) return obj.content.Trim();
+                    if (!string.IsNullOrWhiteSpace(obj.fact)) return obj.fact.Trim();
+                    if (!string.IsNullOrWhiteSpace(obj.text)) return obj.text.Trim();
+                }
+            }
+            catch
+            {
+            }
+        }
+
+        return trimmed;
+    }
+
+    private static EpisodicCommand ParseSaveEventPayload(string payload)
+    {
+        if (string.IsNullOrWhiteSpace(payload))
+            return null;
+
+        string summary = payload.Trim();
+        var tags = new List<string>();
+
+        if (summary.StartsWith("{") && summary.EndsWith("}"))
+        {
+            try
+            {
+                SaveEventPayloadJson obj = JsonUtility.FromJson<SaveEventPayloadJson>(summary);
+                if (obj != null)
+                {
+                    if (!string.IsNullOrWhiteSpace(obj.summary))
+                        summary = obj.summary.Trim();
+                    else if (!string.IsNullOrWhiteSpace(obj.content))
+                        summary = obj.content.Trim();
+
+                    if (obj.tags != null)
+                        AddNormalizedTags(tags, obj.tags);
+                }
+            }
+            catch
+            {
+            }
+
+            if (tags.Count == 0)
+            {
+                Match tagsStringMatch = Regex.Match(payload, "\"tags\"\\s*:\\s*\"([^\"]+)\"", RegexOptions.IgnoreCase);
+                if (tagsStringMatch.Success)
+                    AddNormalizedTags(tags, tagsStringMatch.Groups[1].Value.Split(new[] { ',', '|', '、' }, StringSplitOptions.RemoveEmptyEntries));
+            }
+        }
+
+        if (string.IsNullOrWhiteSpace(summary))
+            return null;
+
+        return new EpisodicCommand
+        {
+            summary = summary.Trim(),
+            tags = tags
+        };
+    }
+
+    private static void AddNormalizedTags(List<string> destination, IEnumerable<string> source)
+    {
+        if (destination == null || source == null)
+            return;
+
+        foreach (string raw in source)
+        {
+            if (string.IsNullOrWhiteSpace(raw))
+                continue;
+
+            string[] split = raw.Split(new[] { ',', '|', '、' }, StringSplitOptions.RemoveEmptyEntries);
+            for (int i = 0; i < split.Length; i++)
+            {
+                string cleaned = split[i].Trim();
+                if (string.IsNullOrWhiteSpace(cleaned))
+                    continue;
+
+                bool exists = false;
+                for (int j = 0; j < destination.Count; j++)
+                {
+                    if (string.Equals(destination[j], cleaned, StringComparison.OrdinalIgnoreCase))
+                    {
+                        exists = true;
+                        break;
+                    }
+                }
+                if (!exists)
+                    destination.Add(cleaned);
+            }
+        }
+    }
+
+    private static string ExtractUserNameFromFact(string fact)
+    {
+        if (string.IsNullOrWhiteSpace(fact))
+            return string.Empty;
+
+        Match m = Regex.Match(fact, @"(?:ユーザー\s*の\s*)?名前は\s*[「『""']?([^」』""'\s。、.!?！？]+)");
+        if (m.Success)
+            return m.Groups[1].Value.Trim();
+        return string.Empty;
+    }
+
+    private static bool IsEmotionTag(string tag)
+    {
+        if (string.IsNullOrWhiteSpace(tag))
+            return false;
+
+        switch (tag.ToUpperInvariant())
+        {
+            case "NORMAL":
+            case "SMILE":
+            case "ANGRY":
+            case "SAD":
+            case "SURPRISED":
+            case "BLUSH":
+            case "WINK":
+            case "DISGUST":
+            case "SMUG":
+            case "THINKING":
+            case "PANIC":
+                return true;
+            default:
+                return false;
+        }
+    }
+
+    private bool StripLeadingMemoryCommandsFromBuffer()
+    {
+        string current = streamBuffer.ToString();
+        bool changed = false;
+
+        while (current.StartsWith("[SAVE_", StringComparison.OrdinalIgnoreCase))
+        {
+            int colon = current.IndexOf(':');
+            if (colon < 0)
+                return false;
+
+            int end = FindMemoryCommandEnd(current, colon + 1);
+            if (end < 0)
+                return false;
+
+            current = current.Substring(end + 1).TrimStart();
+            changed = true;
+        }
+
+        if (changed)
+        {
+            streamBuffer.Clear();
+            streamBuffer.Append(current);
+        }
+
+        return true;
+    }
+
     /// <summary>
     /// Strips &lt;think&gt;...&lt;/think&gt; tags that qwen3 models may produce.
     /// </summary>
@@ -1353,10 +2030,10 @@ Maintain Kurisu's character voice and emotions while conveying the information."
         for (int i = 0; i < text.Length; i++)
         {
             // Pause while menu is open
-            if (menuPanelController != null && menuPanelController.IsMenuOpen)
+            if (IsMenuOpenNow())
             {
                 isSpeaking = false;
-                while (menuPanelController != null && menuPanelController.IsMenuOpen)
+                while (IsMenuOpenNow())
                     yield return null;
                 isSpeaking = true;
             }
@@ -1465,10 +2142,10 @@ Maintain Kurisu's character voice and emotions while conveying the information."
             if (streamDisplayIndex < currentBuffer.Length)
             {
                 // Pause while menu is open
-                if (menuPanelController != null && menuPanelController.IsMenuOpen)
+                if (IsMenuOpenNow())
                 {
                     isSpeaking = false;
-                    while (menuPanelController != null && menuPanelController.IsMenuOpen)
+                    while (IsMenuOpenNow())
                         yield return null;
                     isSpeaking = true;
                 }
@@ -2119,6 +2796,8 @@ Maintain Kurisu's character voice and emotions while conveying the information."
                         case "ParamAngleX":      paramAngleX = p; break;
                         case "ParamAngleY":      paramAngleY = p; break;
                         case "ParamAngleZ":      paramAngleZ = p; break;
+                        case "ParamEyeBallX":    paramEyeBallX = p; break;
+                        case "ParamEyeBallY":    paramEyeBallY = p; break;
                         case "ParamCheek":       paramCheek = p; break;
                         case "ParamBreath":      paramBreath = p; break;
                     }
@@ -2158,8 +2837,293 @@ Maintain Kurisu's character voice and emotions while conveying the information."
             case 2: providerName = "Claude"; break;
             case 3: providerName = "Groq"; break;
             case 4: providerName = "Vertex AI"; break;
+            case 5: providerName = "Ollama"; break;
+            case 6: providerName = "OpenRouter"; break;
         }
 
         statusPanel.UpdateLLMStats(providerName, modelName, latencyMs);
+    }
+
+    // ═══════════════════════════════════════════
+    //  EXPERIMENTAL FEATURES: TTS / STT / RAG
+    // ═══════════════════════════════════════════
+
+    /// <summary>
+    /// Trigger TTS synthesis if enabled in settings.
+    /// Prefers Native TTS, falls back to server-based TTS.
+    /// Called after AI response is received.
+    /// </summary>
+    private void TriggerTTSIfEnabled(string text)
+    {
+        if (string.IsNullOrWhiteSpace(text)) return;
+
+        // Strip emotion tags and special characters for TTS
+        string cleanText = Regex.Replace(text.Trim(), @"\[(NORMAL|SMILE|ANGRY|SAD|SURPRISED|BLUSH|WINK|DISGUST|SMUG|THINKING|PANIC)\]\s*", "", RegexOptions.IgnoreCase);
+
+        // Prefer fully native TTS (SAPI5, no Python)
+        if (NativeTTSService.Instance != null && NativeTTSService.Instance.IsEnabled)
+        {
+            NativeTTSService.Instance.Speak(cleanText, () => Debug.Log("[NativeTTS] Voice playback complete"));
+        }
+    }
+
+    // ═══════════════════════════════════════════
+    //  EXPERIMENTAL: STT Voice Input Button
+    // ═══════════════════════════════════════════
+
+    private void SetupSTTButton()
+    {
+        if (inputPanel == null) return;
+
+        // Try to find an existing STTButton in the panel
+        Transform existing = inputPanel.transform.Find("STTButton");
+        if (existing != null)
+        {
+            Button btn = existing.GetComponent<Button>();
+            if (btn != null)
+            {
+                btn.onClick.RemoveListener(OnSTTButtonClicked);
+                btn.onClick.AddListener(OnSTTButtonClicked);
+            }
+            return;
+        }
+
+        if (chatInput == null) return;
+
+        // Create a simple button to the right of the input field
+        GameObject btnObj = new GameObject("STTButton");
+        btnObj.transform.SetParent(inputPanel.transform, false);
+        Button btnComp = btnObj.AddComponent<Button>();
+        Image img = btnObj.AddComponent<Image>();
+        img.color = new Color(0.85f, 0.25f, 0.25f, 1f);
+
+        RectTransform rt = btnObj.GetComponent<RectTransform>();
+        RectTransform inputRt = chatInput.GetComponent<RectTransform>();
+
+        // Anchor to right side of inputPanel
+        rt.anchorMin = new Vector2(1, 0);
+        rt.anchorMax = new Vector2(1, 1);
+        rt.pivot = new Vector2(1, 0.5f);
+        rt.anchoredPosition = new Vector2(-10, 0);
+        rt.sizeDelta = new Vector2(56, -10);
+
+        btnComp.onClick.AddListener(OnSTTButtonClicked);
+
+        // Shrink chat input to make room
+        if (inputRt != null)
+        {
+            Vector2 oldMax = inputRt.offsetMax;
+            inputRt.offsetMax = new Vector2(-76, oldMax.y);
+        }
+
+        // Optional: add a simple mic icon text
+        GameObject txtObj = new GameObject("Text");
+        txtObj.transform.SetParent(btnObj.transform, false);
+        TextMeshProUGUI txt = txtObj.AddComponent<TextMeshProUGUI>();
+        txt.text = "🎤";
+        txt.alignment = TextAlignmentOptions.Center;
+        txt.fontSize = 28;
+        txt.color = Color.white;
+        txt.raycastTarget = false;
+        RectTransform txtRt = txt.GetComponent<RectTransform>();
+        txtRt.anchorMin = Vector2.zero;
+        txtRt.anchorMax = Vector2.one;
+        txtRt.offsetMin = Vector2.zero;
+        txtRt.offsetMax = Vector2.zero;
+
+        // Show button only if Native STT is enabled
+        bool sttEnabled = NativeSTTService.Instance != null && NativeSTTService.Instance.IsEnabled;
+        btnObj.SetActive(sttEnabled);
+    }
+
+    private void OnSTTButtonClicked()
+    {
+        StartVoiceInput();
+    }
+
+    /// <summary>
+    /// Start STT recording. Called from UI button.
+    /// Uses Native STT (Windows DictationRecognizer or Whisper).
+    /// </summary>
+    public void StartVoiceInput()
+    {
+        // Prefer fully native STT
+        if (NativeSTTService.Instance != null && NativeSTTService.Instance.IsEnabled)
+        {
+            if (NativeSTTService.Instance.IsRecording)
+            {
+                NativeSTTService.Instance.StopRecording();
+                UpdateSTTButtonVisual(false);
+            }
+            else
+            {
+                NativeSTTService.Instance.OnTranscriptionComplete -= OnNativeSTTComplete;
+                NativeSTTService.Instance.OnTranscriptionComplete += OnNativeSTTComplete;
+                NativeSTTService.Instance.OnRecordingStarted += OnNativeSTTRecordingStarted;
+                NativeSTTService.Instance.OnRecordingStopped += OnNativeSTTRecordingStopped;
+                NativeSTTService.Instance.StartRecording(autoStopOnSilence: true);
+                UpdateSTTButtonVisual(true);
+            }
+            return;
+        }
+
+        Debug.LogWarning("[STT] Service not available or not enabled");
+    }
+
+    private void OnNativeSTTComplete(string text)
+    {
+        if (NativeSTTService.Instance != null)
+        {
+            NativeSTTService.Instance.OnTranscriptionComplete -= OnNativeSTTComplete;
+            NativeSTTService.Instance.OnRecordingStarted -= OnNativeSTTRecordingStarted;
+            NativeSTTService.Instance.OnRecordingStopped -= OnNativeSTTRecordingStopped;
+        }
+        UpdateSTTButtonVisual(false);
+        if (string.IsNullOrWhiteSpace(text)) return;
+        if (chatInput != null)
+        {
+            chatInput.text = text;
+            chatInput.Select();
+            chatInput.ActivateInputField();
+        }
+    }
+
+    private void OnNativeSTTRecordingStarted()
+    {
+        UpdateSTTButtonVisual(true);
+    }
+
+    private void OnNativeSTTRecordingStopped()
+    {
+        UpdateSTTButtonVisual(false);
+    }
+
+    private Coroutine sttPulseCoroutine;
+
+    private void UpdateSTTButtonVisual(bool isRecording)
+    {
+        if (inputPanel == null) return;
+        Transform existing = inputPanel.transform.Find("STTButton");
+        if (existing == null) return;
+        Image img = existing.GetComponent<Image>();
+        TextMeshProUGUI txt = existing.GetComponentInChildren<TextMeshProUGUI>();
+        RectTransform rt = existing.GetComponent<RectTransform>();
+
+        if (isRecording)
+        {
+            if (img != null) img.color = new Color(0.95f, 0.15f, 0.15f, 1f);
+            if (txt != null) txt.text = "🎙️";
+            if (sttPulseCoroutine != null) StopCoroutine(sttPulseCoroutine);
+            sttPulseCoroutine = StartCoroutine(PulseSTTButton(rt));
+
+            // Change input placeholder to show recording status
+            if (chatInput != null && chatInput.placeholder is TMP_Text placeholder)
+            {
+                int lang = PlayerPrefs.GetInt("Config_Language", 0);
+                placeholder.text = lang == 0 ? "🎤 聞き取り中..." : "🎤 Listening...";
+            }
+        }
+        else
+        {
+            if (img != null) img.color = new Color(0.2f, 0.6f, 0.95f, 1f);
+            if (txt != null) txt.text = "🎤";
+            if (rt != null) rt.localScale = Vector3.one;
+            if (sttPulseCoroutine != null)
+            {
+                StopCoroutine(sttPulseCoroutine);
+                sttPulseCoroutine = null;
+            }
+
+            // Restore input placeholder
+            if (chatInput != null)
+            {
+                UpdateLanguage();
+            }
+        }
+    }
+
+    private IEnumerator PulseSTTButton(RectTransform rt)
+    {
+        float t = 0f;
+        while (true)
+        {
+            t += Time.deltaTime * 4f;
+            float scale = 1f + Mathf.Sin(t) * 0.15f;
+            if (rt != null) rt.localScale = new Vector3(scale, scale, 1f);
+
+            // Also pulse alpha of the image
+            Transform existing = inputPanel.transform.Find("STTButton");
+            if (existing != null)
+            {
+                Image img = existing.GetComponent<Image>();
+                if (img != null)
+                {
+                    float alpha = 0.7f + Mathf.Sin(t) * 0.3f;
+                    Color c = img.color;
+                    c.a = alpha;
+                    img.color = c;
+                }
+            }
+
+            yield return null;
+        }
+    }
+
+    /// <summary>
+    /// Get RAG-enhanced context for the current query using Native RAG.
+    /// </summary>
+    public void GetRAGContext(string query, Action<string> onComplete)
+    {
+        if (memoryManager == null)
+        {
+            onComplete?.Invoke("");
+            return;
+        }
+
+        // Native RAG only
+        if (NativeRAGService.Instance != null && NativeRAGService.Instance.IsEnabled)
+        {
+            List<string> facts = ExtractFactsFromMemory(memoryManager.GetMemoryContext());
+            string context = NativeRAGService.Instance.GetRelevantContext(query, facts);
+            onComplete?.Invoke(context);
+            return;
+        }
+
+        onComplete?.Invoke("");
+    }
+
+    private List<string> ExtractFactsFromMemory(string memContext)
+    {
+        var facts = new List<string>();
+        if (string.IsNullOrEmpty(memContext)) return facts;
+        string[] lines = memContext.Split(new[] { '\n' }, StringSplitOptions.RemoveEmptyEntries);
+        foreach (string line in lines)
+        {
+            string trimmed = line.Trim();
+            if (trimmed.StartsWith("-") || trimmed.StartsWith("・"))
+            {
+                facts.Add(trimmed.Substring(1).Trim());
+            }
+            else if (!string.IsNullOrEmpty(trimmed) && !trimmed.Contains("━") && !trimmed.Contains("█"))
+            {
+                facts.Add(trimmed);
+            }
+        }
+        return facts;
+    }
+
+    /// <summary>
+    /// Check if experimental features are available (native or server)
+    /// </summary>
+    public static class ExperimentalFeatures
+    {
+        public static bool IsTTSAvailable =>
+            NativeTTSService.Instance != null && NativeTTSService.Instance.IsEnabled;
+
+        public static bool IsSTTAvailable =>
+            NativeSTTService.Instance != null && NativeSTTService.Instance.IsEnabled;
+
+        public static bool IsRAGAvailable =>
+            NativeRAGService.Instance != null && NativeRAGService.Instance.IsEnabled;
     }
 }

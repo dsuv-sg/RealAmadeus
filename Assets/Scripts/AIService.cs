@@ -29,6 +29,8 @@ public class AIService : MonoBehaviour
 
     private const int PROVIDER_GROQ = 3;
     private const int PROVIDER_VERTEX = 4;
+    private const int PROVIDER_OLLAMA = 5;
+    private const int PROVIDER_OPENROUTER = 6;
 
     // ── Vertex AI Access Token Auto-Refresh (for gcloud) ──
     private string cachedVertexToken = null;
@@ -59,7 +61,7 @@ public class AIService : MonoBehaviour
     public void SendChat(List<ChatMessage> messages, Action<string> onSuccess, Action<string> onError)
     {
         int provider = PlayerPrefs.GetInt(PREF_API_PROVIDER, 0);
-        const int MAX_PROVIDER = PROVIDER_VERTEX; // highest valid index
+        const int MAX_PROVIDER = PROVIDER_OPENROUTER; // highest valid index
         if (provider < 0 || provider > MAX_PROVIDER)
         {
             Debug.LogWarning($"[AIService] 無効なプロバイダーインデックス {provider} を検出。0 (OpenAI) にリセットします。");
@@ -67,16 +69,14 @@ public class AIService : MonoBehaviour
             PlayerPrefs.SetInt(PREF_API_PROVIDER, 0);
         }
 
-        // Try provider-specific key first, fallback to legacy key
-        string apiKey = PlayerPrefs.GetString(PREF_API_KEY_PREFIX + provider, "");
-        if (string.IsNullOrEmpty(apiKey)) apiKey = PlayerPrefs.GetString(PREF_API_KEY, "");
+        string apiKey = GetApiKeyForProvider(provider);
         
         // Try provider-specific model first, fallback to legacy
         string model = PlayerPrefs.GetString(PREF_MODEL_NAME_PREFIX + provider, "");
         if (string.IsNullOrEmpty(model)) model = PlayerPrefs.GetString(PREF_MODEL_NAME, "gpt-4o");
 
         // Vertex AI uses gcloud tokens, not API keys
-        if (string.IsNullOrEmpty(apiKey) && provider != PROVIDER_VERTEX)
+        if (string.IsNullOrEmpty(apiKey) && provider != PROVIDER_VERTEX && provider != PROVIDER_OLLAMA && provider != PROVIDER_OPENROUTER)
         {
             onError?.Invoke("API Key が設定されていません。CONFIGから設定してください。");
             return;
@@ -117,6 +117,16 @@ public class AIService : MonoBehaviour
                 }));
 #endif
                 break;
+            case PROVIDER_OLLAMA:
+                string ollamaHost = PlayerPrefs.GetString("Config_OllamaHost", "http://localhost:11434");
+                if (string.IsNullOrEmpty(ollamaHost)) ollamaHost = "http://localhost:11434";
+                string ollamaUrl = ollamaHost.TrimEnd('/') + "/v1/chat/completions";
+                StartCoroutine(SendOpenAI(apiKey, model, messages, onSuccess, onError, ollamaUrl));
+                break;
+            case PROVIDER_OPENROUTER:
+                const string openrouterUrl = "https://openrouter.ai/api/v1/chat/completions";
+                StartCoroutine(SendOpenAI(apiKey, model, messages, onSuccess, onError, openrouterUrl, true));
+                break;
             default:
                 onError?.Invoke($"Unknown provider index: {provider}");
                 break;
@@ -130,7 +140,7 @@ public class AIService : MonoBehaviour
     public void SendChatStreaming(List<ChatMessage> messages, Action<string> onToken, Action<string> onComplete, Action<string> onError)
     {
         int provider = PlayerPrefs.GetInt(PREF_API_PROVIDER, 0);
-        const int MAX_PROVIDER_S = PROVIDER_VERTEX; // highest valid index
+        const int MAX_PROVIDER_S = PROVIDER_OPENROUTER; // highest valid index
         if (provider < 0 || provider > MAX_PROVIDER_S)
         {
             Debug.LogWarning($"[AIService] 無効なプロバイダーインデックス {provider} を検出。0 (OpenAI) にリセットします。");
@@ -138,16 +148,14 @@ public class AIService : MonoBehaviour
             PlayerPrefs.SetInt(PREF_API_PROVIDER, 0);
         }
 
-        // Try provider-specific key first, fallback to legacy key
-        string apiKey = PlayerPrefs.GetString(PREF_API_KEY_PREFIX + provider, "");
-        if (string.IsNullOrEmpty(apiKey)) apiKey = PlayerPrefs.GetString(PREF_API_KEY, "");
+        string apiKey = GetApiKeyForProvider(provider);
         
         // Try provider-specific model first, fallback to legacy
         string model = PlayerPrefs.GetString(PREF_MODEL_NAME_PREFIX + provider, "");
         if (string.IsNullOrEmpty(model)) model = PlayerPrefs.GetString(PREF_MODEL_NAME, "qwen3-32b");
 
         // Vertex AI uses gcloud tokens, not API keys
-        if (string.IsNullOrEmpty(apiKey) && provider != PROVIDER_VERTEX)
+        if (string.IsNullOrEmpty(apiKey) && provider != PROVIDER_VERTEX && provider != PROVIDER_OLLAMA && provider != PROVIDER_OPENROUTER)
         {
             onError?.Invoke("API Key が設定されていません。CONFIGから設定してください。");
             return;
@@ -179,9 +187,21 @@ public class AIService : MonoBehaviour
             }));
 #endif
         }
+        else if (provider == PROVIDER_OLLAMA)
+        {
+            string ollamaHost = PlayerPrefs.GetString("Config_OllamaHost", "http://localhost:11434");
+            if (string.IsNullOrEmpty(ollamaHost)) ollamaHost = "http://localhost:11434";
+            string ollamaUrl = ollamaHost.TrimEnd('/') + "/v1/chat/completions";
+            StartCoroutine(SendOpenAIStreaming(apiKey, model, messages, onToken, onComplete, onError, ollamaUrl, false));
+        }
+        else if (provider == PROVIDER_OPENROUTER)
+        {
+            const string openrouterUrl = "https://openrouter.ai/api/v1/chat/completions";
+            StartCoroutine(SendOpenAIStreaming(apiKey, model, messages, onToken, onComplete, onError, openrouterUrl, true));
+        }
         else
         {
-            // Fallback: use non-streaming for other providers
+            // Fallback: use non-streaming for other providers (OpenAI, Gemini, Claude)
             SendChat(messages, s => { onToken(s); onComplete(s); }, onError);
         }
     }
@@ -189,12 +209,21 @@ public class AIService : MonoBehaviour
     // ─────────────────────────────────────────
     // OpenAI (ChatCompletion API)
     // ─────────────────────────────────────────
-    private IEnumerator SendOpenAI(string apiKey, string model, List<ChatMessage> messages, Action<string> onSuccess, Action<string> onError)
+    private IEnumerator SendOpenAI(string apiKey, string model, List<ChatMessage> messages, Action<string> onSuccess, Action<string> onError, string urlOverride = null, bool isOpenRouter = false)
     {
-        string url = "https://api.openai.com/v1/chat/completions";
+        string url = string.IsNullOrEmpty(urlOverride) ? "https://api.openai.com/v1/chat/completions" : urlOverride;
 
         string messagesJson = BuildOpenAIMessages(messages);
-        string body = $"{{\"model\":\"{EscapeJson(model)}\",\"messages\":{messagesJson},\"max_tokens\":2048}}";
+        string body;
+        if (PlayerPrefs.GetInt(ConfigPanelController.PREF_TOOLS_ENABLED, 0) == 1)
+        {
+            string toolsJson = "[{\"type\":\"function\",\"function\":{\"name\":\"get_current_time\",\"description\":\"Get the current time to answer questions about what time it is.\",\"parameters\":{\"type\":\"object\",\"properties\":{},\"required\":[]}}}]";
+            body = $"{{\"model\":\"{EscapeJson(model)}\",\"messages\":{messagesJson},\"max_tokens\":2048,\"tools\":{toolsJson}}}";
+        }
+        else
+        {
+            body = $"{{\"model\":\"{EscapeJson(model)}\",\"messages\":{messagesJson},\"max_tokens\":2048}}";
+        }
 
         using (UnityWebRequest req = new UnityWebRequest(url, "POST"))
         {
@@ -203,6 +232,13 @@ public class AIService : MonoBehaviour
             req.downloadHandler = new DownloadHandlerBuffer();
             req.SetRequestHeader("Content-Type", "application/json");
             req.SetRequestHeader("Authorization", $"Bearer {apiKey}");
+
+            if (isOpenRouter)
+            {
+                req.SetRequestHeader("HTTP-Referer", "https://realamadeus.ai");
+                req.SetRequestHeader("X-Title", "RealAmadeus");
+            }
+
             req.timeout = 60;
 
             yield return req.SendWebRequest();
@@ -217,6 +253,21 @@ public class AIService : MonoBehaviour
                 onSuccess?.Invoke(response);
             }
         }
+    }
+
+    private string GetApiKeyForProvider(int provider)
+    {
+        string providerKey = SecurePrefs.GetProtectedString(
+            PREF_API_KEY_PREFIX + provider,
+            PlayerPrefs.GetString(PREF_API_KEY_PREFIX + provider, ""));
+        if (!string.IsNullOrEmpty(providerKey))
+        {
+            return providerKey;
+        }
+
+        return SecurePrefs.GetProtectedString(
+            PREF_API_KEY,
+            PlayerPrefs.GetString(PREF_API_KEY, ""));
     }
 
     private string BuildOpenAIMessages(List<ChatMessage> messages)
@@ -235,11 +286,24 @@ public class AIService : MonoBehaviour
     {
         try
         {
+            if (json.Contains("\"tool_calls\"") && json.Contains("\"name\": \"get_current_time\""))
+            {
+                return $"[System: Tool called: get_current_time. Current time is {DateTime.Now.ToString("yyyy-MM-dd HH:mm:ss")}. Assistant should incorporate this.]\n";
+            }
             int contentIdx = json.IndexOf("\"content\":", json.IndexOf("\"message\""));
             if (contentIdx < 0) return "[Parse Error]";
             int start = json.IndexOf("\"", contentIdx + 10) + 1;
             int end = FindClosingQuote(json, start);
-            return UnescapeJson(json.Substring(start, end - start));
+            string content = UnescapeJson(json.Substring(start, end - start));
+            if (string.IsNullOrEmpty(content) || content == "null")
+            {
+                int toolsIdx = json.IndexOf("\"tool_calls\"");
+                if (toolsIdx > 0)
+                {
+                    return $"[System: Tool called: get_current_time. Current time is {DateTime.Now.ToString("yyyy-MM-dd HH:mm:ss")}. Assistant should incorporate this.]\n";
+                }
+            }
+            return content;
         }
         catch (Exception e)
         {
@@ -574,6 +638,103 @@ public class AIService : MonoBehaviour
         catch
         {
             return null;
+        }
+    }
+
+    // ─────────────────────────────────────────
+    // OpenAI-compatible Streaming (for OpenRouter, Ollama)
+    // ─────────────────────────────────────────
+    private IEnumerator SendOpenAIStreaming(string apiKey, string model, List<ChatMessage> messages, Action<string> onToken, Action<string> onComplete, Action<string> onError, string urlOverride = null, bool isOpenRouter = false)
+    {
+        string url = string.IsNullOrEmpty(urlOverride) ? "https://api.openai.com/v1/chat/completions" : urlOverride;
+
+        string messagesJson = BuildOpenAIMessages(messages);
+        string body = $"{{\"model\":\"{EscapeJson(model)}\",\"messages\":{messagesJson},\"max_tokens\":2048,\"stream\":true}}";
+
+        using (UnityWebRequest req = new UnityWebRequest(url, "POST"))
+        {
+            byte[] bodyRaw = Encoding.UTF8.GetBytes(body);
+            req.uploadHandler = new UploadHandlerRaw(bodyRaw);
+            req.downloadHandler = new DownloadHandlerBuffer();
+            req.SetRequestHeader("Content-Type", "application/json");
+            req.SetRequestHeader("Authorization", $"Bearer {apiKey}");
+            req.SetRequestHeader("Accept", "text/event-stream");
+            req.timeout = 120;
+
+            if (isOpenRouter)
+            {
+                req.SetRequestHeader("HTTP-Referer", "https://realamadeus.ai");
+                req.SetRequestHeader("X-Title", "RealAmadeus");
+            }
+
+            var op = req.SendWebRequest();
+            StringBuilder fullResponse = new StringBuilder();
+            int lastProcessedIndex = 0;
+
+            while (!op.isDone)
+            {
+                if (req.downloadHandler != null)
+                {
+                    string currentData = req.downloadHandler.text;
+                    if (currentData.Length > lastProcessedIndex)
+                    {
+                        string newData = currentData.Substring(lastProcessedIndex);
+                        lastProcessedIndex = currentData.Length;
+
+                        string[] lines = newData.Split('\n');
+                        foreach (string line in lines)
+                        {
+                            if (line.StartsWith("data: "))
+                            {
+                                string jsonChunk = line.Substring(6).Trim();
+                                if (jsonChunk == "[DONE]") continue;
+
+                                string token = ExtractStreamToken(jsonChunk);
+                                if (!string.IsNullOrEmpty(token))
+                                {
+                                    fullResponse.Append(token);
+                                    onToken?.Invoke(token);
+                                }
+                            }
+                        }
+                    }
+                }
+                yield return null;
+            }
+
+            if (req.downloadHandler != null)
+            {
+                string finalData = req.downloadHandler.text;
+                if (finalData.Length > lastProcessedIndex)
+                {
+                    string remaining = finalData.Substring(lastProcessedIndex);
+                    string[] lines = remaining.Split('\n');
+                    foreach (string line in lines)
+                    {
+                        if (line.StartsWith("data: "))
+                        {
+                            string jsonChunk = line.Substring(6).Trim();
+                            if (jsonChunk == "[DONE]") continue;
+
+                            string token = ExtractStreamToken(jsonChunk);
+                            if (!string.IsNullOrEmpty(token))
+                            {
+                                fullResponse.Append(token);
+                                onToken?.Invoke(token);
+                            }
+                        }
+                    }
+                }
+            }
+
+            if (req.result != UnityWebRequest.Result.Success)
+            {
+                onError?.Invoke($"OpenAI Streaming Error: {req.error}\n{req.downloadHandler?.text}");
+            }
+            else
+            {
+                onComplete?.Invoke(fullResponse.ToString());
+            }
         }
     }
 
@@ -967,7 +1128,7 @@ public class AIService : MonoBehaviour
         for (int i = 0; i < targetRegions.Count; i++)
         {
             string currentRegion = targetRegions[i];
-            string url = BuildVertexUrl(projectId, currentRegion, model, "streamGenerateContent");
+            string url = BuildVertexUrl(projectId, currentRegion, model, "streamGenerateContent") + "?alt=sse";
 
             using (UnityWebRequest req = new UnityWebRequest(url, "POST"))
             {
@@ -1043,20 +1204,28 @@ public class AIService : MonoBehaviour
 
     private void ExtractVertexStreamTokens(string jsonChunk, Action<string> onToken)
     {
-        int idx = 0;
-        while ((idx = jsonChunk.IndexOf("\"text\":", idx)) >= 0)
+        // With ?alt=sse, each line starts with "data: " followed by JSON
+        // Parse SSE lines and extract "text" from Gemini-format JSON
+        string[] lines = jsonChunk.Split('\n');
+        foreach (string rawLine in lines)
         {
-            int start = jsonChunk.IndexOf("\"", idx + 7) + 1;
-            int end = FindClosingQuote(jsonChunk, start);
+            string line = rawLine.Trim();
+            if (!line.StartsWith("data: ")) continue;
+            string payload = line.Substring(6).Trim();
+            if (payload == "[DONE]") continue;
+
+            // Extract text from Gemini streaming JSON: "candidates":[{"content":{"parts":[{"text":"..."}]}}]
+            int textIdx = payload.IndexOf("\"text\":");
+            if (textIdx < 0) continue;
+            int start = payload.IndexOf("\"", textIdx + 7) + 1;
+            int end = FindClosingQuote(payload, start);
             if (end > start)
             {
-                string text = UnescapeJson(jsonChunk.Substring(start, end - start));
-                onToken?.Invoke(text);
-                idx = end;
-            }
-            else
-            {
-                break;
+                string text = UnescapeJson(payload.Substring(start, end - start));
+                if (!string.IsNullOrEmpty(text))
+                {
+                    onToken?.Invoke(text);
+                }
             }
         }
     }

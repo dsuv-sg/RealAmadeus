@@ -18,11 +18,28 @@ public class MemoryManager : MonoBehaviour
 
     // ─── Persistent Data Structure ───
     [System.Serializable]
+    public struct FactItem
+    {
+        public string content;
+        public int strength;
+        public string lastUpdated;
+    }
+
+    [System.Serializable]
+    public struct EpisodicItem
+    {
+        public string timestamp;
+        public string summary;
+        public List<string> tags;
+    }
+
+    [System.Serializable]
     public class KurisuMemory
     {
         public string userName = "";
-        public List<string> userFacts = new List<string>();
+        public List<FactItem> userFacts = new List<FactItem>();
         public List<string> conversationSummaries = new List<string>();
+        public List<EpisodicItem> episodicMemory = new List<EpisodicItem>();
         public string lastSessionDate = "";
         public int totalInteractions = 0;
         public List<string> recentEmotions = new List<string>();
@@ -31,6 +48,7 @@ public class MemoryManager : MonoBehaviour
 
     private KurisuMemory memory = new KurisuMemory();
     private string savePath;
+    private const int maxEpisodicItems = 50;
 
     // ─── Emotion Tracking ───
     private Queue<string> emotionHistory = new Queue<string>();
@@ -60,13 +78,56 @@ public class MemoryManager : MonoBehaviour
         // User facts
         if (memory.userFacts.Count > 0)
         {
-            lines.Add("【ユーザーについて知っていること】");
-            foreach (var fact in memory.userFacts)
-                lines.Add($"- {fact}");
+            lines.Add("【ユーザーについて知っていること（重要度順）】");
+            var rankedFacts = new List<FactItem>(memory.userFacts);
+            rankedFacts.Sort((a, b) =>
+            {
+                int strengthCmp = b.strength.CompareTo(a.strength);
+                if (strengthCmp != 0) return strengthCmp;
+                DateTime ad = ParseIsoDate(a.lastUpdated);
+                DateTime bd = ParseIsoDate(b.lastUpdated);
+                if (ad != DateTime.MinValue || bd != DateTime.MinValue)
+                    return bd.CompareTo(ad);
+                return string.Compare(a.content, b.content, StringComparison.Ordinal);
+            });
+
+            int factLimit = Mathf.Min(6, rankedFacts.Count);
+            for (int i = 0; i < factLimit; i++)
+            {
+                var fact = rankedFacts[i];
+                string certainty = fact.strength >= 4 ? "高" : (fact.strength >= 2 ? "中" : "低");
+                lines.Add($"- {fact.content}（強度:{Mathf.Max(1, fact.strength)} / 信頼度:{certainty}）");
+            }
+        }
+
+        if (memory.episodicMemory.Count > 0)
+        {
+            lines.Add("【最近のエピソード記憶】");
+            var rankedEpisodes = new List<EpisodicItem>(memory.episodicMemory);
+            rankedEpisodes.Sort((a, b) =>
+            {
+                DateTime ad = ParseIsoDate(a.timestamp);
+                DateTime bd = ParseIsoDate(b.timestamp);
+                if (ad != DateTime.MinValue || bd != DateTime.MinValue)
+                    return bd.CompareTo(ad);
+                return string.Compare(b.timestamp ?? "", a.timestamp ?? "", StringComparison.Ordinal);
+            });
+
+            int episodeLimit = Mathf.Min(4, rankedEpisodes.Count);
+            for (int i = 0; i < episodeLimit; i++)
+            {
+                var episode = rankedEpisodes[i];
+                string line = $"- [{episode.timestamp}] {episode.summary}";
+                if (episode.tags != null && episode.tags.Count > 0)
+                {
+                    line += $"（タグ: {string.Join(", ", episode.tags)}）";
+                }
+                lines.Add(line);
+            }
         }
 
         // Previous conversation summaries
-        if (memory.conversationSummaries.Count > 0)
+        if (memory.conversationSummaries.Count > 0 && memory.episodicMemory.Count == 0)
         {
             lines.Add("【過去の会話の記憶】");
             // Only include last 3 summaries to save context
@@ -132,10 +193,27 @@ public class MemoryManager : MonoBehaviour
     /// </summary>
     public void AddUserFact(string fact)
     {
-        if (string.IsNullOrEmpty(fact)) return;
-        if (memory.userFacts.Contains(fact)) return;
+        if (string.IsNullOrWhiteSpace(fact)) return;
+        string cleaned = fact.Trim();
+        string today = DateTime.Now.ToString("yyyy-MM-dd");
 
-        memory.userFacts.Add(fact);
+        int existingIndex = FindSimilarFactIndex(cleaned);
+        if (existingIndex >= 0)
+        {
+            FactItem existing = memory.userFacts[existingIndex];
+            existing.strength = Mathf.Max(1, existing.strength) + 1;
+            existing.lastUpdated = today;
+            memory.userFacts[existingIndex] = existing;
+            SaveMemory();
+            return;
+        }
+
+        memory.userFacts.Add(new FactItem
+        {
+            content = cleaned,
+            strength = 1,
+            lastUpdated = today
+        });
         if (memory.userFacts.Count > maxLongTermFacts)
             memory.userFacts.RemoveAt(0);
 
@@ -171,7 +249,39 @@ public class MemoryManager : MonoBehaviour
         if (memory.conversationSummaries.Count > 10)
             memory.conversationSummaries.RemoveAt(0);
 
+        AddEpisodicMemory(summary, new List<string> { "要約" });
+    }
+
+    public void AddEpisodicMemory(string summary, List<string> tags = null)
+    {
+        if (string.IsNullOrWhiteSpace(summary)) return;
+
+        var item = new EpisodicItem
+        {
+            timestamp = DateTime.Now.ToString("yyyy-MM-dd"),
+            summary = summary.Trim(),
+            tags = NormalizeTags(tags)
+        };
+
+        memory.episodicMemory.Add(item);
+        if (memory.episodicMemory.Count > maxEpisodicItems)
+            memory.episodicMemory.RemoveAt(0);
+
         SaveMemory();
+    }
+
+    public int FindSimilarFactIndex(string candidate)
+    {
+        if (string.IsNullOrWhiteSpace(candidate)) return -1;
+        string norm = NormalizeFact(candidate);
+
+        for (int i = 0; i < memory.userFacts.Count; i++)
+        {
+            var fact = memory.userFacts[i];
+            if (NormalizeFact(fact.content) == norm)
+                return i;
+        }
+        return -1;
     }
 
     /// <summary>
@@ -317,7 +427,12 @@ public class MemoryManager : MonoBehaviour
             {
                 string json = File.ReadAllText(savePath);
                 memory = JsonUtility.FromJson<KurisuMemory>(json);
+                if (memory == null)
+                    memory = new KurisuMemory();
                 Debug.Log($"[MemoryManager] Memory loaded. {memory.totalInteractions} total interactions.");
+
+                MigrateLegacyFactsIfNeeded(json);
+                NormalizeLoadedData();
 
                 // Restore emotion history
                 foreach (var e in memory.recentEmotions)
@@ -338,5 +453,152 @@ public class MemoryManager : MonoBehaviour
     void OnApplicationQuit()
     {
         SaveMemory();
+    }
+
+    private static string NormalizeFact(string fact)
+    {
+        return string.IsNullOrWhiteSpace(fact) ? string.Empty : fact.Trim().ToLowerInvariant();
+    }
+
+    private static DateTime ParseIsoDate(string value)
+    {
+        if (string.IsNullOrWhiteSpace(value)) return DateTime.MinValue;
+        if (DateTime.TryParse(value, out DateTime dt))
+            return dt.Date;
+        if (value.Length >= 10 && DateTime.TryParse(value.Substring(0, 10), out DateTime dt2))
+            return dt2.Date;
+        return DateTime.MinValue;
+    }
+
+    private static List<string> NormalizeTags(List<string> tags)
+    {
+        var normalized = new List<string>();
+        if (tags == null) return normalized;
+
+        for (int i = 0; i < tags.Count; i++)
+        {
+            string tag = tags[i];
+            if (string.IsNullOrWhiteSpace(tag)) continue;
+            string cleaned = tag.Trim();
+            bool exists = false;
+            for (int j = 0; j < normalized.Count; j++)
+            {
+                if (string.Equals(normalized[j], cleaned, StringComparison.OrdinalIgnoreCase))
+                {
+                    exists = true;
+                    break;
+                }
+            }
+            if (!exists) normalized.Add(cleaned);
+        }
+        return normalized;
+    }
+
+    [System.Serializable]
+    private class LegacyFactsWrapper
+    {
+        public List<string> userFacts = new List<string>();
+    }
+
+    private void MigrateLegacyFactsIfNeeded(string rawJson)
+    {
+        if (memory.userFacts != null && memory.userFacts.Count > 0)
+            return;
+
+        if (string.IsNullOrWhiteSpace(rawJson))
+            return;
+
+        try
+        {
+            LegacyFactsWrapper legacy = JsonUtility.FromJson<LegacyFactsWrapper>(rawJson);
+            if (legacy == null || legacy.userFacts == null || legacy.userFacts.Count == 0)
+                return;
+
+            string today = DateTime.Now.ToString("yyyy-MM-dd");
+            for (int i = 0; i < legacy.userFacts.Count; i++)
+            {
+                string fact = legacy.userFacts[i];
+                if (string.IsNullOrWhiteSpace(fact))
+                    continue;
+                memory.userFacts.Add(new FactItem
+                {
+                    content = fact.Trim(),
+                    strength = 1,
+                    lastUpdated = today
+                });
+            }
+        }
+        catch
+        {
+            // Ignore legacy parse failures and keep current memory state.
+        }
+    }
+
+    private void NormalizeLoadedData()
+    {
+        if (memory.userFacts == null)
+            memory.userFacts = new List<FactItem>();
+        if (memory.conversationSummaries == null)
+            memory.conversationSummaries = new List<string>();
+        if (memory.episodicMemory == null)
+            memory.episodicMemory = new List<EpisodicItem>();
+        if (memory.recentEmotions == null)
+            memory.recentEmotions = new List<string>();
+        if (memory.topicsDiscussed == null)
+            memory.topicsDiscussed = new List<string>();
+
+        var mergedFacts = new List<FactItem>();
+        for (int i = 0; i < memory.userFacts.Count; i++)
+        {
+            var fact = memory.userFacts[i];
+            if (string.IsNullOrWhiteSpace(fact.content))
+                continue;
+
+            fact.content = fact.content.Trim();
+            fact.strength = Mathf.Max(1, fact.strength);
+            if (string.IsNullOrWhiteSpace(fact.lastUpdated))
+                fact.lastUpdated = DateTime.Now.ToString("yyyy-MM-dd");
+
+            int existing = -1;
+            string norm = NormalizeFact(fact.content);
+            for (int j = 0; j < mergedFacts.Count; j++)
+            {
+                if (NormalizeFact(mergedFacts[j].content) == norm)
+                {
+                    existing = j;
+                    break;
+                }
+            }
+
+            if (existing >= 0)
+            {
+                FactItem baseItem = mergedFacts[existing];
+                baseItem.strength = Mathf.Max(1, baseItem.strength) + fact.strength;
+                DateTime baseDate = ParseIsoDate(baseItem.lastUpdated);
+                DateTime nextDate = ParseIsoDate(fact.lastUpdated);
+                if (nextDate > baseDate)
+                    baseItem.lastUpdated = fact.lastUpdated;
+                mergedFacts[existing] = baseItem;
+            }
+            else
+            {
+                mergedFacts.Add(fact);
+            }
+        }
+        memory.userFacts = mergedFacts;
+
+        var normalizedEpisodes = new List<EpisodicItem>();
+        for (int i = 0; i < memory.episodicMemory.Count; i++)
+        {
+            var item = memory.episodicMemory[i];
+            if (string.IsNullOrWhiteSpace(item.summary))
+                continue;
+            item.summary = item.summary.Trim();
+            if (string.IsNullOrWhiteSpace(item.timestamp))
+                item.timestamp = DateTime.Now.ToString("yyyy-MM-dd");
+            item.tags = NormalizeTags(item.tags);
+            normalizedEpisodes.Add(item);
+        }
+        memory.episodicMemory = normalizedEpisodes;
     }
 }

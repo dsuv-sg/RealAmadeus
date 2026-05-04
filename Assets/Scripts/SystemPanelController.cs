@@ -16,6 +16,8 @@ public class SystemPanelController : MonoBehaviour
     private float currentT = 0f;
     private float targetT = 0f;
 
+    public bool IsMenuTransitioningOrOpen => targetT > 0f || (sideMenuController != null && sideMenuController.IsMenuOpen);
+
     public MenuPanelController sideMenuController;
     public CanvasGroup systemCanvasGroup; // Added CanvasGroup reference
 
