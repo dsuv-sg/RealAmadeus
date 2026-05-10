@@ -586,7 +586,19 @@ public class ConfigPanelController : MonoBehaviour
         else if (resStr.Contains("1280")) { width = 1280; height = 720; }
         else if (resStr.Contains("854")) { width = 854; height = 480; }
 
-        Screen.SetResolution(width, height, mode);
+        // Borderless mode is handled by WindowController, so use Windowed mode here.
+        // FullScreenWindow would try to cover the whole display and conflicts
+        // with the manual borderless styling.
+        bool isBorderless = (mode == FullScreenMode.FullScreenWindow && screenModeIndex == 2);
+        FullScreenMode actualMode = isBorderless ? FullScreenMode.Windowed : mode;
+
+        Screen.SetResolution(width, height, actualMode);
+
+#if !UNITY_EDITOR
+        // Screen.SetResolution may recreate the window style,
+        // so restore style for the selected screen mode.
+        WindowController.ApplyWindowStyle(isBorderless);
+#endif
     }
 
     private void OnSaveClicked()
@@ -931,6 +943,6 @@ public class ConfigPanelController : MonoBehaviour
     private string GetSpacingTaggedText(string text)
     {
         if (currentLanguageIndex != 7 || string.IsNullOrEmpty(text)) return text;
-        return System.Text.RegularExpressions.Regex.Replace(text, @"([\u0400-\u04FF]+)", "<cspace=-8.4px>$1</cspace>");
+        return System.Text.RegularExpressions.Regex.Replace(text, @"([\u0400-\u04FF]+)", "<cspace=-9.4px>$1</cspace>");
     }
 }

@@ -154,6 +154,15 @@ public class NativeSTTService : MonoBehaviour
         }
     }
 
+    void OnApplicationFocus(bool hasFocus)
+    {
+        if (!hasFocus && IsRecording)
+        {
+            // Stop recording when losing focus to avoid microphone deadlock on restore
+            StopRecording();
+        }
+    }
+
     void OnDestroy()
     {
         StopRecording();

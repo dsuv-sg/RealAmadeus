@@ -945,7 +945,7 @@ Halte Antworten kurz (1-5 Sätze empfohlen). Eine Vorstellung als KI ist überfl
                 break;
         }
     }
-//
+
     void LateUpdate()
     {
         if (kurisuModel == null) return;
@@ -1341,7 +1341,7 @@ Maintain Kurisu's character voice and emotions while conveying the information."
         string displayText = response;
         string tag = "NORMAL";
 
-        // Strip thinking tags from qwen3 if present (e.g., <think>...</think>)
+        // Strip thinking tags from qwen3 if present (e.g.,  ・・・)
         displayText = StripThinkingTags(displayText);
 
         MemoryCommandResult parsedMemory = ProcessMemoryCommands(displayText);
@@ -1387,10 +1387,12 @@ Maintain Kurisu's character voice and emotions while conveying the information."
         float latency = (Time.realtimeSinceStartup - requestStartTime) * 1000f;
         UpdateStatusPanelStats(latency);
 
+        // Show desktop notification (same behavior/format as QT version)
         if (!notifiedInFlight)
         {
             notifiedInFlight = true;
-            DesktopNotificationService.Show("Amadeus", "AIからのメッセージがあります");
+            string notifMsg = displayText.Length > 100 ? displayText.Substring(0, 100) : displayText;
+            DesktopNotificationService.Show(GetNotificationTitle(), notifMsg);
         }
 
         // BackLog logging is now handled per-page in the typewriter coroutines
@@ -1418,12 +1420,6 @@ Maintain Kurisu's character voice and emotions while conveying the information."
         {
              float latency = (Time.realtimeSinceStartup - requestStartTime) * 1000f;
              UpdateStatusPanelStats(latency);
-
-             if (!notifiedInFlight)
-             {
-                 notifiedInFlight = true;
-                 DesktopNotificationService.Show("Amadeus", "AIからのメッセージがあります");
-             }
         }
 
         streamBuffer.Append(token);
@@ -1588,6 +1584,14 @@ Maintain Kurisu's character voice and emotions while conveying the information."
 
         conversationHistory.Add(new AIService.ChatMessage("assistant", cleanResponse));
 
+        // Show desktop notification on stream complete (same format as QT version)
+        if (!notifiedInFlight)
+        {
+            notifiedInFlight = true;
+            string notifMsg = cleanResponse.Length > 100 ? cleanResponse.Substring(0, 100) : cleanResponse;
+            DesktopNotificationService.Show(GetNotificationTitle(), notifMsg);
+        }
+
         // BackLog logging is now handled per-page in StreamingTypewriterEffect
     }
 
@@ -1645,6 +1649,9 @@ Maintain Kurisu's character voice and emotions while conveying the information."
 
         // Show with ANGRY expression
         ProcessEmotion("ANGRY");
+
+        // Reset notification flag so next successful response can notify
+        notifiedInFlight = false;
 
         // ─── BackLog: Error message ───
         if (backLog != null) backLog.AddLog("Kurisu", kurisuMessage);
@@ -2688,17 +2695,15 @@ Maintain Kurisu's character voice and emotions while conveying the information."
     {
         currentState = newState;
 
+        if (chatInput != null)
+            chatInput.interactable = (newState == ChatState.InputReady);
+
         switch (newState)
         {
             case ChatState.InputReady:
                 if (inputPanel) inputPanel.SetActive(true);
                 if (dialoguePanel) dialoguePanel.SetActive(false);
                 if (waitingIndicator) waitingIndicator.gameObject.SetActive(false);
-                if (chatInput != null)
-                {
-                    chatInput.interactable = true;
-                    chatInput.ActivateInputField();
-                }
                 // Reset to neutral pose when idle — prevents body tilt from lingering
                 ProcessEmotion("NORMAL");
                 isSpeaking = false;
@@ -2983,8 +2988,8 @@ Maintain Kurisu's character voice and emotions while conveying the information."
         if (chatInput != null)
         {
             chatInput.text = text;
-            chatInput.Select();
-            chatInput.ActivateInputField();
+            // NOTE: Select/ActivateInputField intentionally skipped to avoid
+            // Windows freeze when the app is backgrounded.
         }
     }
 
@@ -3110,6 +3115,22 @@ Maintain Kurisu's character voice and emotions while conveying the information."
             }
         }
         return facts;
+    }
+
+    /// <summary>
+    /// Returns the notification title in the current language (same as QT version).
+    /// </summary>
+    private string GetNotificationTitle()
+    {
+        int lang = Mathf.Clamp(PlayerPrefs.GetInt("Config_Language", 0), 0, 7);
+        switch (lang)
+        {
+            case 0: return "アマデウス";
+            case 2: return "阿玛迪斯";
+            case 3: return "아마데우스";
+            case 7: return "Амадеус";
+            default: return "Amadeus";
+        }
     }
 
     /// <summary>

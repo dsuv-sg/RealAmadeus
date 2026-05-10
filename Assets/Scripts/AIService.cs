@@ -14,6 +14,8 @@ using Debug = UnityEngine.Debug;
 /// </summary>
 public class AIService : MonoBehaviour
 {
+    private static bool IsAppForeground() => DesktopNotificationService.IsForegroundWindow();
+
     // PlayerPrefs keys (must match ConfigPanelController)
     private const string PREF_API_PROVIDER = "Config_ApiProvider";
     private const string PREF_API_KEY = "Config_ApiKey";
@@ -547,7 +549,7 @@ public class AIService : MonoBehaviour
             // Poll for streaming data
             while (!op.isDone)
             {
-                if (req.downloadHandler != null)
+                if (IsAppForeground() && req.downloadHandler != null)
                 {
                     string currentData = req.downloadHandler.text;
                     if (currentData.Length > lastProcessedIndex)
@@ -574,7 +576,8 @@ public class AIService : MonoBehaviour
                         }
                     }
                 }
-                yield return null;
+                if (IsAppForeground()) yield return null;
+                else yield return new WaitForSecondsRealtime(0.05f);
             }
 
             // Process any remaining data
@@ -673,7 +676,7 @@ public class AIService : MonoBehaviour
 
             while (!op.isDone)
             {
-                if (req.downloadHandler != null)
+                if (IsAppForeground() && req.downloadHandler != null)
                 {
                     string currentData = req.downloadHandler.text;
                     if (currentData.Length > lastProcessedIndex)
@@ -699,7 +702,8 @@ public class AIService : MonoBehaviour
                         }
                     }
                 }
-                yield return null;
+                if (IsAppForeground()) yield return null;
+                else yield return new WaitForSecondsRealtime(0.05f);
             }
 
             if (req.downloadHandler != null)
@@ -796,7 +800,7 @@ public class AIService : MonoBehaviour
 
             while (!op.isDone)
             {
-                if (req.downloadHandler != null)
+                if (IsAppForeground() && req.downloadHandler != null)
                 {
                     string currentData = req.downloadHandler.text;
                     if (currentData.Length > lastProcessedIndex)
@@ -822,7 +826,8 @@ public class AIService : MonoBehaviour
                         }
                     }
                 }
-                yield return null;
+                if (IsAppForeground()) yield return null;
+                else yield return new WaitForSecondsRealtime(0.05f);
             }
 
             // Process remaining
@@ -1145,7 +1150,7 @@ public class AIService : MonoBehaviour
 
                 while (!op.isDone)
                 {
-                    if (req.downloadHandler != null)
+                    if (IsAppForeground() && req.downloadHandler != null)
                     {
                         string currentData = req.downloadHandler.text;
                         if (currentData.Length > lastProcessedIndex)
@@ -1156,7 +1161,8 @@ public class AIService : MonoBehaviour
                             gotTokens = true;
                         }
                     }
-                    yield return null;
+                    if (IsAppForeground()) yield return null;
+                    else yield return new WaitForSecondsRealtime(0.05f);
                 }
 
                 if (req.result == UnityWebRequest.Result.Success)
