@@ -26,13 +26,13 @@ Therefore, we hereby state that neither DSUV nor Elvelt will request any monetar
 
 ## How to use / 使用方法
 
-本リポジトリをクローンし、Unity 6(6000.3.2f1)でプロジェクトを読み込んで下さい。
+本リポジトリをクローンし、Unity 6(6000.4.6f1)でプロジェクトを読み込んで下さい。
 
 [Live2DのUnitySDK](https://www.live2d.com/sdk/download/unity/) を、利用規約を許諾した上で、ダウンロードしてください。
 
 CubismSdkForUnity-X-r.X.X.unitypackageを開き、Assets/Live2Dとなるように配置して下さい。
 
-Clone this repository and load the project in Unity 6 (6000.3.2f1).
+Clone this repository and load the project in Unity 6 (6000.4.6f1).
 
 Download the [Live2D Unity SDK](https://www.live2d.com/sdk/download/unity/) after agreeing to the terms of use.
 
