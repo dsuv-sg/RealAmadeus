@@ -24,6 +24,7 @@ public class AmadeusChatController : MonoBehaviour
     public GameObject inputPanel;
     public CanvasGroup dialogueCanvasGroup;
     public TextMeshProUGUI waitingIndicator;
+    public TextMeshProUGUI cancelHintText;
     public GameObject autoModeIndicator; // Added Auto Mode Indicator
 
     [Header("Settings")]
@@ -133,6 +134,19 @@ public class AmadeusChatController : MonoBehaviour
     private float burstTimer = 0f;
     private float burstProgress = 1f;
     private string currentEmotionTag = "NORMAL";
+
+    // ═══ Sleeping & Sneeze & Dev Commands ═══
+    private float wakeUpTimer = 0f;
+    private string wakeUpTargetTag = "NORMAL";
+    private float wakeUpHeadX = 0f;
+    private float wakeUpGazeX = 0f;
+    private float inactivityTimer = 0f;
+    private const float inactivityThreshold = 60f;
+    private Vector3 lastMousePosition;
+    private float sneezeEasterEggTimer = 0f;
+    private float sneezeEyeOpen = 1.0f;
+    private float sneezeMouthOpen = 0f;
+    private string activeBurstTag = "";
 
     // ═══ Emotion-specific idle motion ═══
     private float idlePhase = 0f;
@@ -642,6 +656,8 @@ Halte Antworten kurz (1-5 Sätze empfohlen). Eine Vorstellung als KI ist überfl
         targetEmotion = GetEmotionTarget("NORMAL");
         currentEmotion = targetEmotion;
 
+        lastMousePosition = Input.mousePosition;
+
         // DEBUG & AUTO-LINK: Check references and try to find them if missing
         if (backLog == null)
         {
@@ -819,56 +835,44 @@ Halte Antworten kurz (1-5 Sätze empfohlen). Eine Vorstellung als KI ist überfl
     {
         ResolveLanguageTargets();
 
-        int lang = Mathf.Clamp(PlayerPrefs.GetInt("Config_Language", 0), 0, 7);
-        switch (lang)
-        {
-            case 0: characterName = "アマデウス紅莉栖"; break;
-            case 1: characterName = "Amadeus Kurisu"; break;
-            case 2: characterName = "阿玛迪斯·红莉栖"; break;
-            case 3: characterName = "아마데우스 쿠리스"; break;
-            case 4: characterName = "Amadeus Kurisu"; break;
-            case 5: characterName = "Amadeus Kurisu"; break;
-            case 6: characterName = "Amadeus Kurisu"; break;
-            case 7: characterName = "Амадеус Курису"; break;
-            default: characterName = "Amadeus Kurisu"; break;
-        }
+        int lang = PlayerPrefs.GetInt("Config_Language", 0);
+        characterName = LocalizationManager.Instance.T("amadeus_kurisu", "Amadeus Kurisu");
         if (characterNameText != null) 
         {
             characterNameText.text = GetSpacingTaggedText(characterName, lang);
         }
 
         // Update placeholder
-        if (chatInput != null)
-        {
-            string placeholderText;
-            switch (lang)
-            {
-                case 0: placeholderText = "メッセージを入力"; break;
-                case 1: placeholderText = "Enter your message..."; break;
-                case 2: placeholderText = "输入消息..."; break;
-                case 3: placeholderText = "메시지를 입력하세요..."; break;
-                case 4: placeholderText = "Escribe tu mensaje..."; break;
-                case 5: placeholderText = "Saisissez votre message..."; break;
-                case 6: placeholderText = "Nachricht eingeben..."; break;
-                case 7: placeholderText = "Введите сообщение..."; break;
-                default: placeholderText = "Enter your message..."; break;
-            }
+        UpdateChatInputPlaceholder();
 
-            if (chatInput.placeholder is TMP_Text placeholder)
+        if (cancelHintText != null)
+        {
+            cancelHintText.text = GetSpacingTaggedText(LocalizationManager.Instance.T("cancel_hint", "CTRL+C to cancel"), lang);
+        }
+    }
+
+    private void UpdateChatInputPlaceholder()
+    {
+        if (chatInput == null) return;
+        int lang = PlayerPrefs.GetInt("Config_Language", 0);
+        string key = (currentEmotionTag == "SLEEPING") ? "sleeping_placeholder" : "enter_message";
+        string fallback = (currentEmotionTag == "SLEEPING") ? "Zzz... (Press any key or move mouse to wake up)" : "Enter your message...";
+        string placeholderText = LocalizationManager.Instance.T(key, fallback);
+
+        if (chatInput.placeholder is TMP_Text placeholder)
+        {
+            placeholder.text = GetSpacingTaggedText(placeholderText, lang);
+        }
+        else
+        {
+            TMP_Text[] texts = chatInput.GetComponentsInChildren<TMP_Text>(true);
+            for (int i = 0; i < texts.Length; i++)
             {
-                placeholder.text = GetSpacingTaggedText(placeholderText, lang);
-            }
-            else
-            {
-                TMP_Text[] texts = chatInput.GetComponentsInChildren<TMP_Text>(true);
-                for (int i = 0; i < texts.Length; i++)
+                if (texts[i] != null &&
+                    texts[i].name.IndexOf("placeholder", StringComparison.OrdinalIgnoreCase) >= 0)
                 {
-                    if (texts[i] != null &&
-                        texts[i].name.IndexOf("placeholder", StringComparison.OrdinalIgnoreCase) >= 0)
-                    {
-                        texts[i].text = GetSpacingTaggedText(placeholderText, lang);
-                        break;
-                    }
+                    texts[i].text = GetSpacingTaggedText(placeholderText, lang);
+                    break;
                 }
             }
         }
@@ -876,13 +880,43 @@ Halte Antworten kurz (1-5 Sätze empfohlen). Eine Vorstellung als KI ist überfl
     
     private string GetSpacingTaggedText(string text, int lang)
     {
-        if (lang != 7 || string.IsNullOrEmpty(text)) return text;
-        // TextMeshPro spacing tag
-        return System.Text.RegularExpressions.Regex.Replace(text, @"([\u0400-\u04FF]+)", "<cspace=-8.4px>$1</cspace>");
+        return LocalizationManager.Instance.GetSpacingTaggedText(text, lang);
+    }
+
+    public void CancelAPIRequest()
+    {
+        aiService.CancelInFlightRequest();
+        SetState(ChatState.InputReady);
+        chatInput.ActivateInputField();
+        chatInput.text = "";
     }
 
     void Update()
     {
+        bool isCtrlC = false;
+        try
+        {
+            if (Keyboard.current != null)
+            {
+                isCtrlC = Keyboard.current.ctrlKey.isPressed && Keyboard.current.cKey.wasPressedThisFrame;
+            }
+        }
+        catch (System.Exception) {}
+
+        try
+        {
+            if (!isCtrlC)
+            {
+                isCtrlC = (Input.GetKey(KeyCode.LeftControl) || Input.GetKey(KeyCode.RightControl)) && Input.GetKeyDown(KeyCode.C);
+            }
+        }
+        catch (System.Exception) {}
+
+        if (currentState == ChatState.WaitingAPI && isCtrlC)
+        {
+            CancelAPIRequest();
+            return;
+        }
         if (Keyboard.current == null) return;
         
         // F3 Toggle Auto Mode
@@ -903,6 +937,34 @@ Halte Antworten kurz (1-5 Sätze empfohlen). Eine Vorstellung als KI ist überfl
         // ─── Pause dialogue input while menu is open ───
         bool menuOpen = IsMenuOpenNow();
         if (menuOpen) return; // Skip Enter key and Auto timer while menu is visible
+
+        // Inactivity (Sleeping) Timer Update
+        if (currentState == ChatState.InputReady || currentState == ChatState.WaitForAdvance)
+        {
+            bool activityDetected = Input.anyKey || (Input.mousePosition != lastMousePosition);
+            if (activityDetected)
+            {
+                inactivityTimer = 0f;
+                lastMousePosition = Input.mousePosition;
+                if (currentEmotionTag == "SLEEPING")
+                {
+                    ProcessEmotion("NORMAL");
+                }
+            }
+            else
+            {
+                inactivityTimer += Time.deltaTime;
+                if (inactivityTimer >= inactivityThreshold && currentEmotionTag != "SLEEPING")
+                {
+                    ProcessEmotion("SLEEPING");
+                }
+            }
+        }
+        else
+        {
+            inactivityTimer = 0f;
+            lastMousePosition = Input.mousePosition;
+        }
 
         // Sync with Config if changed elsewhere (optional, but good for consistency if config is open)
         // For performance, we might just reload on menu close, but checking prefs every frame is slow.
@@ -953,6 +1015,87 @@ Halte Antworten kurz (1-5 Sätze empfohlen). Eine Vorstellung als KI ist überfl
         float dt = Time.deltaTime;
         idlePhase += dt;
 
+
+
+        // Startled wake-up transition blend
+        if (wakeUpTimer > 0f)
+        {
+            wakeUpTimer -= dt;
+            if (wakeUpTimer <= 0f)
+            {
+                wakeUpTimer = 0f;
+                wakeUpHeadX = 0f;
+                wakeUpGazeX = 0f;
+
+                // Done waking up, transition to the actual target tag
+                string actualTag = wakeUpTargetTag;
+                SetExpression(GetExpressionIndex(actualTag));
+                targetEmotion = GetEmotionTarget(actualTag);
+                currentEmotionTag = actualTag;
+            }
+            else
+            {
+                EmotionTarget targetBase = GetEmotionTarget(wakeUpTargetTag);
+                EmotionTarget targetSurprised = GetEmotionTarget("SURPRISED");
+
+                float blend = 1f;
+                if (wakeUpTimer < 1.7f)
+                {
+                    blend = Mathf.Clamp01(wakeUpTimer / 1.7f);
+                }
+
+                targetEmotion.browY = Mathf.Lerp(targetBase.browY, targetSurprised.browY, blend);
+                targetEmotion.browForm = Mathf.Lerp(targetBase.browForm, targetSurprised.browForm, blend);
+                targetEmotion.browAngle = Mathf.Lerp(targetBase.browAngle, targetSurprised.browAngle, blend);
+                targetEmotion.eyeOpen = Mathf.Lerp(targetBase.eyeOpen, targetSurprised.eyeOpen, blend);
+                targetEmotion.eyeSmile = Mathf.Lerp(targetBase.eyeSmile, targetSurprised.eyeSmile, blend);
+                targetEmotion.mouthForm = Mathf.Lerp(targetBase.mouthForm, targetSurprised.mouthForm, blend);
+                targetEmotion.cheek = Mathf.Lerp(targetBase.cheek, targetSurprised.cheek, blend);
+                targetEmotion.headAngleX = Mathf.Lerp(targetBase.headAngleX, targetSurprised.headAngleX, blend);
+                targetEmotion.headAngleY = Mathf.Lerp(targetBase.headAngleY, targetSurprised.headAngleY, blend);
+                targetEmotion.headAngleZ = Mathf.Lerp(targetBase.headAngleZ, targetSurprised.headAngleZ, blend);
+                targetEmotion.bodyAngleX = Mathf.Lerp(targetBase.bodyAngleX, targetSurprised.bodyAngleX, blend);
+                targetEmotion.bodyAngleY = Mathf.Lerp(targetBase.bodyAngleY, targetSurprised.bodyAngleY, blend);
+                targetEmotion.bodyAngleZ = Mathf.Lerp(targetBase.bodyAngleZ, targetSurprised.bodyAngleZ, blend);
+
+                float elapsed = 2.5f - wakeUpTimer;
+                if (elapsed >= 0.4f && elapsed < 1.4f)
+                {
+                    float wave = Mathf.Sin((elapsed - 0.4f) * (2.0f * Mathf.PI / 1.0f));
+                    wakeUpHeadX = wave * 15f;
+                    wakeUpGazeX = wave * 0.7f;
+                }
+                else
+                {
+                    wakeUpHeadX = 0f;
+                    wakeUpGazeX = 0f;
+                }
+            }
+        }
+
+        // Sneeze Easter Egg (idle normal state, not speaking/loading/waking/sleeping)
+        bool isNormallyIdle = (currentEmotionTag == "NORMAL" && burstProgress >= 1f && wakeUpTimer <= 0f && !isSpeaking && currentState == ChatState.InputReady);
+        if (isNormallyIdle)
+        {
+            sneezeEasterEggTimer += dt;
+            if (sneezeEasterEggTimer >= 45.0f)
+            {
+                sneezeEasterEggTimer = 0f;
+                if (UnityEngine.Random.value < 0.15f)
+                {
+                    currentEmotionTag = "NORMAL";
+                    activeBurst = GetMotionBurst("SNEEZE");
+                    activeBurstTag = "SNEEZE";
+                    burstTimer = 0f;
+                    burstProgress = 0f;
+                }
+            }
+        }
+        else
+        {
+            sneezeEasterEggTimer = 0f;
+        }
+
         // ═══ 1. Smoothly lerp base emotion parameters ═══
         currentEmotion.browY = Mathf.Lerp(currentEmotion.browY, targetEmotion.browY, dt * emotionLerpSpeed);
         currentEmotion.browForm = Mathf.Lerp(currentEmotion.browForm, targetEmotion.browForm, dt * emotionLerpSpeed);
@@ -974,18 +1117,74 @@ Halte Antworten kurz (1-5 Sätze empfohlen). Eine Vorstellung als KI ist überfl
         if (burstProgress < 1f)
         {
             burstTimer += dt;
-            burstProgress = Mathf.Clamp01(burstTimer / activeBurst.duration);
+            burstProgress = Mathf.Clamp01(burstTimer / Mathf.Max(0.001f, activeBurst.duration));
 
             float t01 = burstProgress;
-            float spring = Mathf.Sin(t01 * Mathf.PI * 2.5f) * (1f - t01) * (1f - t01);
-            float intensity = activeBurst.intensity * spring;
 
-            burstBodyX = activeBurst.bodyX * intensity;
-            burstBodyY = activeBurst.bodyY * intensity;
-            burstBodyZ = activeBurst.bodyZ * intensity;
-            burstHeadX = activeBurst.headX * intensity;
-            burstHeadY = activeBurst.headY * intensity;
-            burstHeadZ = activeBurst.headZ * intensity;
+            if (currentEmotionTag == "SLEEPING")
+            {
+                // Custom "nod, nod, nod" head pitch curve
+                float nodCurve = 0f;
+                if (t01 < 0.33f)
+                {
+                    nodCurve = Mathf.Sin((t01 / 0.33f) * Mathf.PI) * -10f;
+                }
+                else if (t01 < 0.66f)
+                {
+                    nodCurve = Mathf.Sin(((t01 - 0.33f) / 0.33f) * Mathf.PI) * -10f;
+                }
+                else
+                {
+                    nodCurve = Mathf.Sin(((t01 - 0.66f) / 0.34f) * Mathf.PI) * -18f;
+                }
+                burstHeadY = nodCurve;
+                burstBodyY = t01 * -1.5f + (nodCurve * 0.15f);
+            }
+            else if (activeBurstTag == "SNEEZE")
+            {
+                // Dynamic sneeze animation curve (Inhale -> Sneeze snap -> Recover)
+                if (t01 < 0.5f)
+                {
+                    // Inhale / Wind-up phase (0.0 to 1.1s): tilt head back slowly, close eyes
+                    float localT = t01 / 0.5f;
+                    burstHeadY = localT * 12f; // Tilt back
+                    burstHeadX = localT * -3f; // Tilt slightly side
+                    burstBodyY = localT * 1.5f;
+                    sneezeEyeOpen = 1.0f - (localT * 0.9f); // eyes narrow down
+                }
+                else if (t01 < 0.65f)
+                {
+                    // Sneeze / Snap phase (1.1s to 1.4s): sneeze jerk forward, open mouth wide
+                    float localT = (t01 - 0.5f) / 0.15f;
+                    burstHeadY = 12f - (localT * 32f); // snap down to -20.0f
+                    burstHeadX = -3f + (localT * 6f);
+                    burstBodyY = 1.5f - (localT * 5f); // chest sinks down
+                    sneezeEyeOpen = 0.1f * (1.0f - localT); // eyes shut tight
+                    sneezeMouthOpen = localT * 0.9f; // mouth opens wide
+                }
+                else
+                {
+                    // Recover phase (1.4s to 2.2s): slow recovery, bashful pose
+                    float localT = (t01 - 0.65f) / 0.35f;
+                    burstHeadY = -20f + (localT * 20f);
+                    burstHeadX = 3f - (localT * 3f);
+                    burstBodyY = -3.5f + (localT * 3.5f);
+                    sneezeEyeOpen = 0.0f + (localT * 1.0f); // eyes open back up
+                    sneezeMouthOpen = 0.9f * (1.0f - localT); // mouth closes
+                }
+            }
+            else
+            {
+                float spring = Mathf.Sin(t01 * Mathf.PI * 2.5f) * (1f - t01) * (1f - t01);
+                float intensity = activeBurst.intensity * spring;
+
+                burstBodyX = activeBurst.bodyX * intensity;
+                burstBodyY = activeBurst.bodyY * intensity;
+                burstBodyZ = activeBurst.bodyZ * intensity;
+                burstHeadX = activeBurst.headX * intensity;
+                burstHeadY = activeBurst.headY * intensity;
+                burstHeadZ = activeBurst.headZ * intensity;
+            }
         }
 
         // ═══ 3. Emotion-specific idle body motion ═══
@@ -1009,7 +1208,26 @@ Halte Antworten kurz (1-5 Sätze empfohlen). Eine Vorstellung als KI ist überfl
 
         // ═══ 4.5 Blinking & Eye Openness ═══
         UpdateBlink(dt);
-        float eyeOpenValue = currentEmotion.eyeOpen * blinkValue;
+        
+        float baseEyeOpen = currentEmotion.eyeOpen;
+        bool isSneezeActive = (burstProgress < 1.0f && activeBurstTag == "SNEEZE");
+        float nodEyeOpen = 1.0f;
+        if (currentEmotionTag == "SLEEPING" && burstProgress < 1.0f)
+        {
+            float t01 = burstProgress;
+            float localT = 0f;
+            if (t01 < 0.33f) localT = t01 / 0.33f;
+            else if (t01 < 0.66f) localT = (t01 - 0.33f) / 0.33f;
+            else localT = (t01 - 0.66f) / 0.34f;
+            nodEyeOpen = 0.18f * Mathf.Sin(localT * Mathf.PI);
+            baseEyeOpen = nodEyeOpen;
+        }
+        else if (isSneezeActive)
+        {
+            baseEyeOpen = sneezeEyeOpen;
+        }
+
+        float eyeOpenValue = Mathf.Max(0f, baseEyeOpen * blinkValue);
         
         if (currentEmotion.isWink)
         {
@@ -1027,15 +1245,19 @@ Halte Antworten kurz (1-5 Sätze empfohlen). Eine Vorstellung als KI ist überfl
 
         // ═══ 4.6 Gaze Tracking ═══
         bool isGazeEnabled = PlayerPrefs.GetInt("Config_GazeTracking", 1) == 1;
-        float targetGazeX = 0f;
-        float targetGazeY = 0f;
+        float mouseGazeX = 0f;
+        float mouseGazeY = 0f;
 
         if (isGazeEnabled)
         {
             // Normalize mouse position (-1.0 to 1.0)
-            targetGazeX = Mathf.Clamp(((Input.mousePosition.x / Screen.width) - 0.5f) * 2.0f, -0.7f, 0.7f);
-            targetGazeY = Mathf.Clamp(((Input.mousePosition.y / Screen.height) - 0.5f) * 2.0f, -0.7f, 0.7f);
+            mouseGazeX = Mathf.Clamp(((Input.mousePosition.x / Screen.width) - 0.5f) * 2.0f, -0.7f, 0.7f);
+            mouseGazeY = Mathf.Clamp(((Input.mousePosition.y / Screen.height) - 0.5f) * 2.0f, -0.7f, 0.7f);
         }
+
+        bool disableGaze = (wakeUpTimer > 0f) || (currentEmotionTag == "SLEEPING");
+        float targetGazeX = wakeUpTimer > 0f ? wakeUpGazeX : (disableGaze ? 0f : mouseGazeX);
+        float targetGazeY = disableGaze ? 0f : mouseGazeY;
 
         smoothedGazeX = Mathf.Lerp(smoothedGazeX, targetGazeX, dt * gazeSmoothSpeed);
         smoothedGazeY = Mathf.Lerp(smoothedGazeY, targetGazeY, dt * gazeSmoothSpeed);
@@ -1049,34 +1271,41 @@ Halte Antworten kurz (1-5 Sätze empfohlen). Eine Vorstellung als KI ist überfl
         SetParam(paramBodyAngleZ, currentEmotion.bodyAngleZ + burstBodyZ + idleBodyZ);
 
         // ═══ 6. Apply head = base + burst + idle + gaze ═══
-        SetParam(paramAngleX, currentEmotion.headAngleX + burstHeadX + idleHeadX + (smoothedGazeX * 25.0f));
+        SetParam(paramAngleX, currentEmotion.headAngleX + burstHeadX + idleHeadX + (smoothedGazeX * 25.0f) + wakeUpHeadX);
         SetParam(paramAngleY, currentEmotion.headAngleY + burstHeadY + idleHeadY + (smoothedGazeY * 25.0f));
         SetParam(paramAngleZ, currentEmotion.headAngleZ + burstHeadZ + idleHeadZ);
 
         // ═══ 7. Lip sync ═══
         if (paramMouthOpenY != null)
         {
-            bool isActivelyTyping = isSpeaking && (currentState == ChatState.Typing || currentState == ChatState.StreamingTyping) && !skipTyping;
-            if (isActivelyTyping)
+            if (isSneezeActive)
             {
-                float t = Time.time;
-                // Enhanced lip sync: Use AudioManager if TTS is playing, otherwise use procedural
-                float mouth;
-                if (AudioManager.Instance != null && AudioManager.Instance.IsVoicePlaying)
-                {
-                    mouth = AudioManager.Instance.CurrentLipSyncValue;
-                }
-                else
-                {
-                    mouth = Mathf.Abs(Mathf.Sin(t * 12f)) * 0.5f
-                          + Mathf.Abs(Mathf.Sin(t * 7.3f)) * 0.3f
-                          + Mathf.PerlinNoise(t * 8f, 5f) * 0.2f;
-                }
-                paramMouthOpenY.Value = Mathf.Clamp01(mouth);
+                paramMouthOpenY.Value = Mathf.Clamp01(sneezeMouthOpen);
             }
             else
             {
-                paramMouthOpenY.Value = Mathf.Lerp(paramMouthOpenY.Value, 0f, dt * 10f);
+                bool isActivelyTyping = isSpeaking && (currentState == ChatState.Typing || currentState == ChatState.StreamingTyping) && !skipTyping;
+                if (isActivelyTyping)
+                {
+                    float t = Time.time;
+                    // Enhanced lip sync: Use AudioManager if TTS is playing, otherwise use procedural
+                    float mouth;
+                    if (AudioManager.Instance != null && AudioManager.Instance.IsVoicePlaying)
+                    {
+                        mouth = AudioManager.Instance.CurrentLipSyncValue;
+                    }
+                    else
+                    {
+                        mouth = Mathf.Abs(Mathf.Sin(t * 12f)) * 0.5f
+                              + Mathf.Abs(Mathf.Sin(t * 7.3f)) * 0.3f
+                              + Mathf.PerlinNoise(t * 8f, 5f) * 0.2f;
+                    }
+                    paramMouthOpenY.Value = Mathf.Clamp01(mouth);
+                }
+                else
+                {
+                    paramMouthOpenY.Value = Mathf.Lerp(paramMouthOpenY.Value, 0f, dt * 10f);
+                }
             }
         }
 
@@ -1085,7 +1314,9 @@ Halte Antworten kurz (1-5 Sätze empfohlen). Eine Vorstellung als KI ist überfl
         if (isSpeaking) breathDepth = 0.7f; // Deeper breathing while speaking
         if (currentEmotionTag == "PANIC" || currentEmotionTag == "SURPRISED") breathDepth = 0.9f;
         else if (currentEmotionTag == "SAD") breathDepth = 0.4f;
-        float breathValue = (Mathf.Sin(Time.time * 1.2f) + 1f) * breathDepth;
+        
+        float breathCycleSpeed = (currentEmotionTag == "SLEEPING") ? 0.8f : 1.2f;
+        float breathValue = (Mathf.Sin(Time.time * breathCycleSpeed) + 1f) * breathDepth;
         SetParam(paramBreath, breathValue);
     }
 
@@ -1121,6 +1352,7 @@ Halte Antworten kurz (1-5 Sätze empfohlen). Eine Vorstellung als KI ist überfl
         int languageIndex = PlayerPrefs.GetInt("Config_Language", 0);
         switch (languageIndex)
         {
+            case 0: return KURISU_SYSTEM_PROMPT_SHORT;
             case 1: return KURISU_SYSTEM_PROMPT_SHORT_EN;
             case 2: return KURISU_SYSTEM_PROMPT_SHORT_ZH;
             case 3: return KURISU_SYSTEM_PROMPT_SHORT_KO;
@@ -1128,7 +1360,7 @@ Halte Antworten kurz (1-5 Sätze empfohlen). Eine Vorstellung als KI ist überfl
             case 5: return KURISU_SYSTEM_PROMPT_SHORT_FR;
             case 6: return KURISU_SYSTEM_PROMPT_SHORT_DE;
             case 7: return KURISU_SYSTEM_PROMPT_SHORT_RU;
-            default: return KURISU_SYSTEM_PROMPT_SHORT;
+            default: return KURISU_SYSTEM_PROMPT_SHORT_EN; // Fallback to English for UK, PT, TR
         }
     }
 
@@ -1271,7 +1503,96 @@ Maintain Kurisu's character voice and emotions while conveying the information."
     {
         if (string.IsNullOrWhiteSpace(text)) return;
         if (currentState != ChatState.InputReady) return;
+
+        string trimmed = text.Trim();
+        if (trimmed.StartsWith("/dev"))
+        {
+            HandleDevCommand(trimmed);
+            return;
+        }
+
         StartCoroutine(OnChatSubmitCoroutine(text));
+    }
+
+    private void HandleDevCommand(string cmd)
+    {
+        if (cmd == "/dev emotion help")
+        {
+            // Trigger typewriter with help text
+            string helpText = "";
+            int lang = PlayerPrefs.GetInt("Config_Language", 0);
+            if (lang == 0) // Japanese
+            {
+                helpText = "【サポートされているモーションID一覧】\n" +
+                           "・NORMAL (通常)\n" +
+                           "・SMILE (笑顔)\n" +
+                           "・ANGRY (怒り)\n" +
+                           "・SAD (悲しみ)\n" +
+                           "・SURPRISED (驚き)\n" +
+                           "・BLUSH (照れ)\n" +
+                           "・WINK (ウィンク)\n" +
+                           "・DISGUST (嫌悪)\n" +
+                           "・SMUG (どや顔)\n" +
+                           "・THINKING (考え中)\n" +
+                           "・PANIC (混乱)\n" +
+                           "・SLEEPING (居眠り)\n" +
+                           "・SNEEZE (クシャミ)\n\n" +
+                           "※コマンド例: /dev emotion smile で対象のモーションに変更します。";
+            }
+            else // English and other languages
+            {
+                helpText = "【Supported Emotion ID List】\n" +
+                           "・NORMAL (Normal)\n" +
+                           "・SMILE (Smile)\n" +
+                           "・ANGRY (Angry)\n" +
+                           "・SAD (Sad)\n" +
+                           "・SURPRISED (Surprised)\n" +
+                           "・BLUSH (Blush)\n" +
+                           "・WINK (Wink)\n" +
+                           "・DISGUST (Disgust)\n" +
+                           "・SMUG (Smug)\n" +
+                           "・THINKING (Thinking)\n" +
+                           "・PANIC (Panic)\n" +
+                           "・SLEEPING (Sleeping)\n" +
+                           "・SNEEZE (Sneeze)\n\n" +
+                           "※ Example command: /dev emotion smile to change to the target motion.";
+            }
+
+            chatInput.text = "";
+            
+            // Set state and start typewriter
+            SetState(ChatState.Typing);
+            StartCoroutine(TypewriterEffect(helpText));
+            return;
+        }
+
+        if (cmd.StartsWith("/dev emotion "))
+        {
+            var parts = cmd.Split(' ');
+            if (parts.Length >= 3)
+            {
+                string targetTag = parts[2].Trim().ToUpper();
+                if (!string.IsNullOrEmpty(targetTag))
+                {
+                    ProcessEmotion(targetTag);
+                }
+            }
+            chatInput.text = "";
+            chatInput.ActivateInputField();
+            return;
+        }
+
+        if (cmd == "/dev motion reset")
+        {
+            ProcessEmotion("NORMAL");
+            chatInput.text = "";
+            chatInput.ActivateInputField();
+            return;
+        }
+
+        // Unknown command
+        chatInput.text = "";
+        chatInput.ActivateInputField();
     }
 
     private IEnumerator OnChatSubmitCoroutine(string text)
@@ -1310,8 +1631,8 @@ Maintain Kurisu's character voice and emotions while conveying the information."
         {
             int provider = PlayerPrefs.GetInt("Config_ApiProvider", 0);
 
-            // Use streaming for Groq, Vertex AI, Ollama, and OpenRouter providers
-            if (provider == 3 || provider == 4 || provider == 5 || provider == 6)
+            bool isCompatibleOpenAI = (provider == 0 && PlayerPrefs.GetInt("Config_OpenAICompatible", 0) == 1);
+            if (provider == 3 || provider == 4 || provider == 5 || provider == 6 || isCompatibleOpenAI)
             {
                 aiService.SendChatStreaming(
                     new List<AIService.ChatMessage>(conversationHistory),
@@ -1606,31 +1927,27 @@ Maintain Kurisu's character voice and emotions while conveying the information."
         {
             kurisuMessage = "……APIキーが設定されてないみたいよ。CONFIGから設定してちょうだい。";
         }
-        else if (error.Contains("401") || error.Contains("authentication") || error.Contains("invalid key") || error.Contains("Unauthorized"))
+        else if (error.Contains("401") || error.Contains("Unauthorized"))
         {
             kurisuMessage = "APIキーが無効みたい……もう一度確認して設定し直してくれる？";
         }
-        else if (error.Contains("429") || error.Contains("rate limit") || error.Contains("Rate limit") || error.Contains("quota"))
+        else if (error.Contains("429") || error.Contains("rate limit") || error.Contains("quota"))
         {
             kurisuMessage = "リクエストが多すぎるみたい。少し待ってからもう一度試してくれない？";
         }
-        else if (error.Contains("timeout") || error.Contains("Timeout") || error.Contains("timed out"))
+        else if (error.Contains("timeout") || error.Contains("Timeout"))
         {
             kurisuMessage = "応答がタイムアウトしたわ……ネットワークの状態を確認してみて。";
         }
-        else if (error.Contains("Cannot connect") || error.Contains("Cannot resolve") || error.Contains("Network") || error.Contains("ネットワーク"))
+        else if (error.Contains("Cannot connect") || error.Contains("Network") || error.Contains("ネットワーク"))
         {
             kurisuMessage = "ネットワークに接続できないわ。インターネット接続を確認してちょうだい。";
-        }
-        else if (error.Contains("Unknown provider") || error.Contains("無効なプロバイダー"))
-        {
-            kurisuMessage = "APIプロバイダーの設定がおかしいわ。CONFIGからプロバイダーを選び直して。";
         }
         else if (error.Contains("403") || error.Contains("Forbidden"))
         {
             kurisuMessage = "このAPIへのアクセスが拒否されたわ。権限を確認してみて。";
         }
-        else if (error.Contains("500") || error.Contains("Internal Server") || error.Contains("502") || error.Contains("503"))
+        else if (error.Contains("500") || error.Contains("502") || error.Contains("503"))
         {
             kurisuMessage = "サーバー側でエラーが起きてるみたい。しばらくしてからもう一度試して。";
         }
@@ -1638,7 +1955,7 @@ Maintain Kurisu's character voice and emotions while conveying the information."
         {
             kurisuMessage = "指定されたモデルが見つからないみたい。CONFIGからモデル名を確認して。";
         }
-        else if (error.Contains("VertexOAuthService") || error.Contains("アクセストークン") || error.Contains("gcloud"))
+        else if (error.Contains("gcloud") || error.Contains("アクセストークン"))
         {
             kurisuMessage = "Vertex AIの認証に失敗したわ。gcloudの設定を確認してみて。";
         }
@@ -2056,14 +2373,28 @@ Maintain Kurisu's character voice and emotions while conveying the information."
             dialogueText.text += c;
 
             // Pause Check
-            bool isPauseChar = (c == '。' || c == '！' || c == '？' || c == '!' || c == '?' || c == '\n');
-            // Don't pause if next char is closing bracket
+            bool isPauseChar = (c == '。' || c == '！' || c == '？' || c == '!' || c == '?' || c == '\n' || (c == '.' && IsSentenceEndingPeriod(text, i)));
+            // Don't pause if next char is closing bracket/quote
             if (isPauseChar && i + 1 < text.Length)
             {
                 char nextC = text[i + 1];
-                if (nextC == '」' || nextC == '）' || nextC == ')' || nextC == '』' || nextC == '”')
+                if (nextC == '」' || nextC == '）' || nextC == ')' || nextC == '』' || nextC == '”' || nextC == '"' || nextC == '\'')
                 {
                     isPauseChar = false;
+                }
+            }
+
+            // Also, if the current character is a closing bracket/quote, and the PREVIOUS character was a pause character (but we didn't pause because of the closing bracket), we should pause now!
+            if (!isPauseChar && (c == '」' || c == '）' || c == ')' || c == '』' || c == '”' || c == '"' || c == '\''))
+            {
+                if (i - 1 >= 0)
+                {
+                    char prevC = text[i - 1];
+                    bool prevIsPause = (prevC == '。' || prevC == '！' || prevC == '？' || prevC == '!' || prevC == '?' || prevC == '\n' || (prevC == '.' && IsSentenceEndingPeriod(text, i - 1)));
+                    if (prevIsPause)
+                    {
+                        isPauseChar = true;
+                    }
                 }
             }
 
@@ -2105,7 +2436,8 @@ Maintain Kurisu's character voice and emotions while conveying the information."
             {
                 float delay = baseDelay;
                 if (c == '、' || c == ',' || c == '…') delay = baseDelay * 2.5f;
-                else if (c == '」' || c == '）') delay = baseDelay * 1.5f;
+                else if (c == '」' || c == '）' || c == ')' || c == '』' || c == '”' || c == '"' || c == '\'') delay = baseDelay * 1.5f;
+                else if (c == '.') delay = baseDelay * 2.5f;
                 yield return new WaitForSeconds(delay);
             }
         }
@@ -2191,14 +2523,28 @@ Maintain Kurisu's character voice and emotions while conveying the information."
                 streamDisplayIndex++;
 
                 // Pause Check
-                bool isPauseChar = (c == '。' || c == '！' || c == '？' || c == '!' || c == '?' || c == '\n');
+                bool isPauseChar = (c == '。' || c == '！' || c == '？' || c == '!' || c == '?' || c == '\n' || (c == '.' && IsSentenceEndingPeriod(currentBuffer, streamDisplayIndex - 1)));
                 // Don't pause if next char is closing bracket
                 if (isPauseChar && streamDisplayIndex < currentBuffer.Length)
                 {
                     char nextC = currentBuffer[streamDisplayIndex];
-                    if (nextC == '」' || nextC == '）' || nextC == ')' || nextC == '』' || nextC == '”')
+                    if (nextC == '」' || nextC == '）' || nextC == ')' || nextC == '』' || nextC == '”' || nextC == '"' || nextC == '\'')
                     {
                         isPauseChar = false;
+                    }
+                }
+
+                // Also, if the current character is a closing bracket/quote, and the PREVIOUS character was a pause character (but we didn't pause because of the closing bracket), we should pause now!
+                if (!isPauseChar && (c == '」' || c == '）' || c == ')' || c == '』' || c == '”' || c == '"' || c == '\''))
+                {
+                    if (streamDisplayIndex - 2 >= 0)
+                    {
+                        char prevC = currentBuffer[streamDisplayIndex - 2];
+                        bool prevIsPause = (prevC == '。' || prevC == '！' || prevC == '？' || prevC == '!' || prevC == '?' || prevC == '\n' || (prevC == '.' && IsSentenceEndingPeriod(currentBuffer, streamDisplayIndex - 2)));
+                        if (prevIsPause)
+                        {
+                            isPauseChar = true;
+                        }
                     }
                 }
 
@@ -2240,7 +2586,8 @@ Maintain Kurisu's character voice and emotions while conveying the information."
                 {
                     float delay = baseDelay;
                     if (c == '、' || c == ',' || c == '…') delay = baseDelay * 2.5f;
-                    else if (c == '」' || c == '）') delay = baseDelay * 1.5f;
+                    else if (c == '」' || c == '）' || c == ')' || c == '』' || c == '”' || c == '"' || c == '\'') delay = baseDelay * 1.5f;
+                    else if (c == '.') delay = baseDelay * 2.5f;
                     yield return new WaitForSeconds(delay);
                 }
             }
@@ -2275,28 +2622,97 @@ Maintain Kurisu's character voice and emotions while conveying the information."
         SetState(ChatState.WaitForAdvance);
     }
 
+    private bool IsSentenceEndingPeriod(string text, int index)
+    {
+        if (index < 0 || index >= text.Length || text[index] != '.')
+            return false;
+
+        // Check if it's part of an ellipsis (e.g., "...")
+        if (index + 1 < text.Length && text[index + 1] == '.')
+            return false;
+        if (index - 1 >= 0 && text[index - 1] == '.')
+            return false;
+
+        // Find the preceding word to check for abbreviations
+        int wordStart = index - 1;
+        while (wordStart >= 0 && char.IsLetter(text[wordStart]))
+        {
+            wordStart--;
+        }
+        wordStart++;
+        int wordLen = index - wordStart;
+        if (wordLen > 0)
+        {
+            string prevWord = text.Substring(wordStart, wordLen).ToLower();
+            string[] abbreviations = { "mr", "mrs", "ms", "dr", "prof", "sr", "jr", "vs", "eg", "ie", "etc", "ca", "al", "co", "corp", "inc", "ltd", "st", "ave", "rd", "vol", "ed", "gen", "rep", "sen" };
+            if (System.Array.IndexOf(abbreviations, prevWord) >= 0)
+                return false;
+        }
+
+        // Check if the next character (skipping closing quotes/brackets) is a space, newline, carriage return, or end of string
+        int nextIndex = index + 1;
+        while (nextIndex < text.Length)
+        {
+            char nextC = text[nextIndex];
+            if (nextC == '”' || nextC == '」' || nextC == '）' || nextC == ')' || nextC == '』' || nextC == '"' || nextC == '\'' || nextC == ']' || nextC == '}')
+            {
+                nextIndex++;
+            }
+            else
+            {
+                break;
+            }
+        }
+
+        if (nextIndex >= text.Length)
+            return true; // EOF is sentence ending
+
+        char endC = text[nextIndex];
+        if (endC == ' ' || endC == '\n' || endC == '\r' || endC == '\t')
+            return true;
+
+        return false;
+    }
+
     // ═══════════════════════════════════════════
     //  EMOTION SYSTEM
     // ═══════════════════════════════════════════
 
     private void ProcessEmotion(string tag)
     {
-        tag = tag.ToUpper().Trim();
-        if (string.IsNullOrEmpty(tag)) tag = "NORMAL";
+        tag = tag.Trim().ToUpper();
+        if (tag == currentEmotionTag && wakeUpTimer <= 0f) return;
 
-        int index = GetExpressionIndex(tag);
-        if (index >= 0) SetExpression(index);
+        bool isWakingUp = (currentEmotionTag == "SLEEPING" && tag != "SLEEPING");
 
-        targetEmotion = GetEmotionTarget(tag);
-
-        if (tag != currentEmotionTag)
+        if (isWakingUp)
         {
-            currentEmotionTag = tag;
-            activeBurst = GetMotionBurst(tag);
+            wakeUpTimer = 2.5f;
+            wakeUpTargetTag = tag;
+
+            SetExpression(GetExpressionIndex("SURPRISED"));
+            targetEmotion = GetEmotionTarget("SURPRISED");
+            currentEmotionTag = "SURPRISED";
+            activeBurst = GetMotionBurst("SURPRISED");
+            activeBurstTag = "SURPRISED";
             burstTimer = 0f;
             burstProgress = 0f;
             idlePhase = 0f;
         }
+        else
+        {
+            wakeUpTimer = 0f;
+            SetExpression(GetExpressionIndex(tag));
+            targetEmotion = GetEmotionTarget(tag);
+            currentEmotionTag = tag;
+            activeBurst = GetMotionBurst(tag);
+            activeBurstTag = tag;
+            burstTimer = 0f;
+            burstProgress = 0f;
+            idlePhase = 0f;
+        }
+
+        UpdateChatInputPlaceholder();
     }
 
     private int GetExpressionIndex(string tag)
@@ -2314,6 +2730,8 @@ Maintain Kurisu's character voice and emotions while conveying the information."
             case "SMUG":      return 1; // Map to SMILE base
             case "THINKING":  return 4; // Map to NORMAL base
             case "PANIC":     return 5; // Map to SURPRISED base
+            case "SLEEPING":  return 4; // Map to NORMAL base
+            case "SNEEZE":    return 4; // Map to NORMAL base
             default:          return 4;
         }
     }
@@ -2424,6 +2842,15 @@ Maintain Kurisu's character voice and emotions while conveying the information."
                 e.cheek = 0.6f;
                 break;
 
+            case "SLEEPING":
+                e.browY = -0.3f; e.browForm = 0.2f; e.browAngle = -0.2f;
+                e.eyeOpen = 0.0f; e.eyeSmile = 0.0f;
+                e.mouthForm = -0.1f;
+                e.bodyAngleX = -1.0f; e.bodyAngleY = -2.0f; e.bodyAngleZ = -2.0f;
+                e.headAngleX = -12.0f; e.headAngleY = -10.0f; e.headAngleZ = -8.0f;
+                e.cheek = 0.0f;
+                break;
+
             default:
                 break;
         }
@@ -2503,6 +2930,18 @@ Maintain Kurisu's character voice and emotions while conveying the information."
                 b.bodyX = 0f; b.bodyY = 0f; b.bodyZ = 0f;
                 b.headX = 0f; b.headY = 0f; b.headZ = 0f;
                 b.duration = 0.2f; b.intensity = 2.0f; // Jittery
+                break;
+
+            case "SLEEPING":
+                b.bodyX = -1f; b.bodyY = -2f; b.bodyZ = -1f;
+                b.headX = -2f; b.headY = -3f; b.headZ = -2f;
+                b.duration = 4.5f; b.intensity = 0.3f;
+                break;
+
+            case "SNEEZE":
+                b.bodyX = 0f; b.bodyY = 0f; b.bodyZ = 0f;
+                b.headX = 0f; b.headY = 0f; b.headZ = 0f;
+                b.duration = 2.2f; b.intensity = 1.0f;
                 break;
         }
 
@@ -2639,6 +3078,16 @@ Maintain Kurisu's character voice and emotions while conveying the information."
                 headY = panic * 1.5f;
                 headZ = panic * 0.5f;
                 break;
+
+            case "SLEEPING":
+                // Slower, deeper chest expansion and breathing rise/fall (bodyY, headY) synchronized with breath speed
+                bodyX = Drift(phase * 0.3f, 0.15f, 0f, 0.5f);
+                bodyY = Drift(phase * 0.3f, 0.5f, 10f, 0.6f) + Mathf.Sin(phase * 0.8f) * 0.6f;
+                bodyZ = Drift(phase * 0.3f, 0.1f, 20f, 0.3f);
+                headX = Drift(phase * 0.3f, 0.2f, 30f, 1.0f);
+                headY = Drift(phase * 0.3f, 0.15f, 40f, 0.5f) + Mathf.Sin(phase * 0.8f) * 0.3f;
+                headZ = Drift(phase * 0.3f, 0.2f, 50f, 1.5f);
+                break;
         }
     }
 
@@ -2697,6 +3146,11 @@ Maintain Kurisu's character voice and emotions while conveying the information."
 
         if (chatInput != null)
             chatInput.interactable = (newState == ChatState.InputReady);
+
+        if (cancelHintText != null)
+        {
+            cancelHintText.gameObject.SetActive(newState == ChatState.WaitingAPI);
+        }
 
         switch (newState)
         {
@@ -3025,7 +3479,7 @@ Maintain Kurisu's character voice and emotions while conveying the information."
             if (chatInput != null && chatInput.placeholder is TMP_Text placeholder)
             {
                 int lang = PlayerPrefs.GetInt("Config_Language", 0);
-                placeholder.text = lang == 0 ? "🎤 聞き取り中..." : "🎤 Listening...";
+                placeholder.text = LocalizationManager.Instance.T("chat_stt_recording_placeholder", "🎤 Listening...");
             }
         }
         else
@@ -3122,15 +3576,7 @@ Maintain Kurisu's character voice and emotions while conveying the information."
     /// </summary>
     private string GetNotificationTitle()
     {
-        int lang = Mathf.Clamp(PlayerPrefs.GetInt("Config_Language", 0), 0, 7);
-        switch (lang)
-        {
-            case 0: return "アマデウス";
-            case 2: return "阿玛迪斯";
-            case 3: return "아마데우스";
-            case 7: return "Амадеус";
-            default: return "Amadeus";
-        }
+        return LocalizationManager.Instance.T("amadeus", "Amadeus");
     }
 
     /// <summary>

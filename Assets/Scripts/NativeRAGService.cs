@@ -65,6 +65,10 @@ public class NativeRAGService : MonoBehaviour
     private HashSet<string> stopWords = new HashSet<string>();
     private bool needsRecompute = false;
 
+    // V1.3U: serialize all reads/writes of the documents / documentFrequency
+    // collections so callers can safely search from background threads.
+    private readonly object _indexLock = new object();
+
     void Awake()
     {
         if (Instance != null && Instance != this)
@@ -92,27 +96,30 @@ public class NativeRAGService : MonoBehaviour
     public void AddDocument(string id, string text)
     {
         if (string.IsNullOrWhiteSpace(text)) return;
-        documents.RemoveAll(d => d.id == id);
-
-        var tokens = Tokenize(text);
-        var rawTF = ComputeRawTF(tokens);
-
-        var doc = new Document {
-            id = id,
-            text = text,
-            tokenCount = tokens.Count,
-            rawTF = rawTF,
-            tfidf = ComputeTF(tokens) // kept for backward compatibility
-        };
-        documents.Add(doc);
-        totalDocuments = documents.Count;
-
-        foreach (var token in rawTF.Keys)
+        lock (_indexLock)
         {
-            if (!documentFrequency.ContainsKey(token)) documentFrequency[token] = 0;
-            documentFrequency[token]++;
+            documents.RemoveAll(d => d.id == id);
+
+            var tokens = Tokenize(text);
+            var rawTF = ComputeRawTF(tokens);
+
+            var doc = new Document {
+                id = id,
+                text = text,
+                tokenCount = tokens.Count,
+                rawTF = rawTF,
+                tfidf = ComputeTF(tokens) // kept for backward compatibility
+            };
+            documents.Add(doc);
+            totalDocuments = documents.Count;
+
+            foreach (var token in rawTF.Keys)
+            {
+                if (!documentFrequency.ContainsKey(token)) documentFrequency[token] = 0;
+                documentFrequency[token]++;
+            }
+            needsRecompute = false; // BM25 does not need precomputed TF-IDF
         }
-        needsRecompute = false; // BM25 does not need precomputed TF-IDF
     }
 
     /// <summary>
@@ -120,31 +127,51 @@ public class NativeRAGService : MonoBehaviour
     /// </summary>
     public void RemoveDocument(string id)
     {
-        var doc = documents.Find(d => d.id == id);
-        if (doc == null) return;
-        documents.Remove(doc);
-        totalDocuments = documents.Count;
-        RebuildDF();
-        needsRecompute = true;
+        lock (_indexLock)
+        {
+            var doc = documents.Find(d => d.id == id);
+            if (doc == null) return;
+            documents.Remove(doc);
+            totalDocuments = documents.Count;
+            RebuildDF();
+            needsRecompute = true;
+        }
     }
 
     /// <summary>
     /// Search for documents similar to the query using BM25 scoring.
+    /// Thread-safe: can be called from background threads.
     /// </summary>
     public List<SearchResult> Search(string query, int? topK = null)
     {
-        if (!IsEnabled || documents.Count == 0) return new List<SearchResult>();
+        if (!IsEnabled) return new List<SearchResult>();
+
+        List<Document> snapshot;
+        lock (_indexLock)
+        {
+            if (documents.Count == 0) return new List<SearchResult>();
+            snapshot = new List<Document>(documents);
+        }
 
         var qTokens = Tokenize(query);
         if (qTokens.Count == 0) return new List<SearchResult>();
 
-        float avgdl = ComputeAvgDocumentLength();
+        int totalDocs;
+        Dictionary<string, int> dfSnapshot;
+        lock (_indexLock)
+        {
+            totalDocs = totalDocuments;
+            dfSnapshot = new Dictionary<string, int>(documentFrequency);
+        }
+
+        float avgdl = ComputeAvgDocumentLength(snapshot);
 
         var results = new List<SearchResult>();
-        foreach (var doc in documents)
+        float threshold = Threshold;
+        foreach (var doc in snapshot)
         {
-            float score = ComputeBM25Score(qTokens, doc, avgdl);
-            if (score >= Threshold)
+            float score = ComputeBM25Score(qTokens, doc, avgdl, dfSnapshot, totalDocs);
+            if (score >= threshold)
             {
                 results.Add(new SearchResult { id = doc.id, text = doc.text, score = score });
             }
@@ -164,10 +191,9 @@ public class NativeRAGService : MonoBehaviour
         foreach (var fact in facts)
         {
             string id = fact.GetHashCode().ToString();
-            if (!documents.Exists(d => d.id == id))
-            {
-                AddDocument(id, fact);
-            }
+            bool exists;
+            lock (_indexLock) { exists = documents.Exists(d => d.id == id); }
+            if (!exists) AddDocument(id, fact);
         }
 
         var results = Search(query, topK);
@@ -187,10 +213,19 @@ public class NativeRAGService : MonoBehaviour
     /// </summary>
     public void Clear()
     {
-        documents.Clear();
-        documentFrequency.Clear();
-        totalDocuments = 0;
-        needsRecompute = false;
+        lock (_indexLock)
+        {
+            documents.Clear();
+            documentFrequency.Clear();
+            totalDocuments = 0;
+            needsRecompute = false;
+        }
+    }
+
+    /// <summary>Returns the current document count. Thread-safe.</summary>
+    public int DocumentCount
+    {
+        get { lock (_indexLock) { return documents.Count; } }
     }
 
     private void RebuildDF()
@@ -246,25 +281,24 @@ public class NativeRAGService : MonoBehaviour
         return tf;
     }
 
-    private float ComputeAvgDocumentLength()
+    private float ComputeAvgDocumentLength(List<Document> docs)
     {
-        if (documents.Count == 0) return 0f;
+        if (docs == null || docs.Count == 0) return 0f;
         int total = 0;
-        foreach (var doc in documents) total += doc.tokenCount;
-        return (float)total / documents.Count;
+        foreach (var doc in docs) total += doc.tokenCount;
+        return (float)total / docs.Count;
     }
 
-    private float ComputeBM25Score(List<string> qTokens, Document doc, float avgdl)
+    private float ComputeBM25Score(List<string> qTokens, Document doc, float avgdl, Dictionary<string, int> dfSnapshot, int totalDocs)
     {
         float score = 0f;
         var uniqueTokens = new HashSet<string>(qTokens);
 
         foreach (var token in uniqueTokens)
         {
-            if (!documentFrequency.ContainsKey(token)) continue;
+            if (!dfSnapshot.TryGetValue(token, out int df)) continue;
 
-            int df = documentFrequency[token];
-            float idf = Mathf.Log10((totalDocuments - df + 0.5f) / (df + 0.5f) + 1f);
+            float idf = Mathf.Log10((totalDocs - df + 0.5f) / (df + 0.5f) + 1f);
 
             float f = doc.rawTF.ContainsKey(token) ? doc.rawTF[token] : 0f;
             float docLen = Mathf.Max(1f, doc.tokenCount);

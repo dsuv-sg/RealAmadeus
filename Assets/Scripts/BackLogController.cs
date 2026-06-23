@@ -210,7 +210,7 @@ public class BackLogController : MonoBehaviour
         nameLE.flexibleWidth = 0f;
 
         var nameTMP = nameObj.AddComponent<TextMeshProUGUI>();
-        nameTMP.text = $"<b>{namePrefix}</b>";
+        nameTMP.text = $"<b>{GetSpacingTaggedTextForName(namePrefix, langIdx)}</b>";
         nameTMP.fontSize = 26;
         nameTMP.color = nameColor;
         nameTMP.alignment = TextAlignmentOptions.TopLeft;
@@ -348,21 +348,13 @@ public class BackLogController : MonoBehaviour
             if (tmp == null) continue;
 
             string namePrefix = GetNameForRole(role, langIdx);
-            tmp.text = $"<b>{GetSpacingTaggedText(namePrefix, langIdx)}</b>";
+            tmp.text = $"<b>{GetSpacingTaggedTextForName(namePrefix, langIdx)}</b>";
         }
 
         var closeButtonText = ResolveCloseButtonText();
         if (closeButtonText != null)
         {
-            string Close_JA = "閉じる", Close_EN = "Close", Close_ZH = "关闭", Close_KO = "닫기", Close_ES = "Cerrar", Close_FR = "Fermer", Close_DE = "Schließen", Close_RU = "Закрыть";
-            if (langIdx == 1) closeButtonText.text = Close_EN;
-            else if (langIdx == 2) closeButtonText.text = Close_ZH;
-            else if (langIdx == 3) closeButtonText.text = Close_KO;
-            else if (langIdx == 4) closeButtonText.text = Close_ES;
-            else if (langIdx == 5) closeButtonText.text = Close_FR;
-            else if (langIdx == 6) closeButtonText.text = Close_DE;
-            else if (langIdx == 7) closeButtonText.text = GetSpacingTaggedText(Close_RU, langIdx);
-            else closeButtonText.text = Close_JA;
+            closeButtonText.text = GetSpacingTaggedText(LocalizationManager.Instance.T("close", "Close"), langIdx);
         }
     }
 
@@ -394,30 +386,82 @@ public class BackLogController : MonoBehaviour
 
     private string GetSpacingTaggedText(string text, int lang)
     {
-        if (lang != 7 || string.IsNullOrEmpty(text)) return text;
-        return System.Text.RegularExpressions.Regex.Replace(text, @"([\u0400-\u04FF]+)", "<cspace=-8.4px>$1</cspace>");
+        return LocalizationManager.Instance.GetSpacingTaggedText(text, lang);
+    }
+
+    private string GetSpacingTaggedTextForName(string text, int lang)
+    {
+        if (string.IsNullOrEmpty(text) || !LocalizationManager.Instance.IsCyrillic(lang)) return text;
+
+        var result = new System.Text.StringBuilder();
+        string currentType = "";
+        var currentText = new System.Text.StringBuilder();
+
+        System.Action flush = () => {
+            if (currentText.Length == 0) return;
+            string run = currentText.ToString();
+            if (currentType == "cyrillic")
+            {
+                string spacing = "-12.0px";
+                result.Append("<cspace=").Append(spacing).Append(">").Append(run).Append("</cspace>");
+            }
+            else if (currentType == "cyrillic_i")
+            {
+                string spacing = "-7.0px";
+                result.Append("<cspace=").Append(spacing).Append(">").Append(run).Append("</cspace>");
+            }
+            else
+            {
+                result.Append(run);
+            }
+            currentText.Clear();
+        };
+
+        for (int i = 0; i < text.Length; i++)
+        {
+            char c = text[i];
+            string type = "other";
+
+            if (c >= 0x0400 && c <= 0x04FF)
+            {
+                if (LocalizationManager.Instance.IsCyrillicI(c))
+                {
+                    type = "cyrillic_i";
+                }
+                else if (i + 1 < text.Length && LocalizationManager.Instance.IsCyrillicI(text[i + 1]))
+                {
+                    type = "cyrillic_i";
+                }
+                else if (i - 1 >= 0 && LocalizationManager.Instance.IsCyrillicI(text[i - 1]))
+                {
+                    type = "cyrillic_i";
+                }
+                else
+                {
+                    type = "cyrillic";
+                }
+            }
+
+            if (type != currentType && currentText.Length > 0)
+            {
+                flush();
+            }
+            if (currentText.Length == 0) currentType = type;
+            currentText.Append(c);
+        }
+        flush();
+
+        return result.ToString();
     }
 
     private string GetNameForRole(string role, int langIdx)
     {
-        string getTr(string ja, string en, string zh, string ko, string es, string fr, string de, string ru)
-        {
-            if (langIdx == 1) return en;
-            if (langIdx == 2) return zh;
-            if (langIdx == 3) return ko;
-            if (langIdx == 4) return es;
-            if (langIdx == 5) return fr;
-            if (langIdx == 6) return de;
-            if (langIdx == 7) return ru;
-            return ja;
-        }
-
         switch (role.ToLower())
         {
             case "user": case "me":
-                return getTr("あなた", "You", "你", "당신", "Tú", "Vous", "Du", "Вы");
+                return LocalizationManager.Instance.T("you", "You");
             case "assistant": case "kurisu": case "amadeus":
-                return getTr("アマデウス紅莉栖", "Amadeus Kurisu", "阿玛迪斯·红莉栖", "아마데우스 쿠리스", "Amadeus Kurisu", "Amadeus Kurisu", "Amadeus Kurisu", "Амадеус Курису");
+                return LocalizationManager.Instance.T("amadeus_kurisu", "Amadeus Kurisu");
             default:
                 return role.ToUpper();
         }

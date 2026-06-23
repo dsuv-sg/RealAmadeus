@@ -1,3 +1,4 @@
+using System;
 using TMPro;
 using UnityEngine;
 using UnityEngine.InputSystem;
@@ -23,6 +24,8 @@ public class Manager : MonoBehaviour
         loginPanel.SetActive(true);
         EnsureLoginErrorText();
         SetLoginErrorVisible(false);
+        UpdateLanguage();
+        UpdateOperatorDisplay("---");
     }
 
     // Update is called once per frame
@@ -148,21 +151,37 @@ private void EnsureLoginErrorText()
         var statusPanel = FindObjectOfType<StatusPanelController>(true);
         if (statusPanel != null)
         {
-            Transform row = statusPanel.transform.Find("InfoGrid/LeftCol/Row_OPERATOR");
-            if (row != null)
+            statusPanel.SetOperatorName(name);
+        }
+    }
+
+    public void UpdateLanguage()
+    {
+        if (loginPanel == null) return;
+        var texts = loginPanel.GetComponentsInChildren<TextMeshProUGUI>(true);
+        foreach (var tmp in texts)
+        {
+            if (tmp == null || string.IsNullOrEmpty(tmp.text)) continue;
+            // Skip actual typed input text
+            if (tmp.transform.parent != null && tmp.transform.parent.name.Contains("TextArea")) continue;
+
+            string clean = System.Text.RegularExpressions.Regex.Replace(tmp.text, @"<[^>]+>", "").Trim();
+            string key = LocalizationManager.Instance.LookupKey(clean);
+            if (key != null)
             {
-                foreach (Transform child in row)
-                {
-                    if (child.name == "Text" && child.localPosition.x > 0)
-                    {
-                        var tmp = child.GetComponent<TextMeshProUGUI>();
-                        if (tmp != null)
-                        {
-                            tmp.text = name;
-                        }
-                        break;
-                    }
-                }
+                tmp.text = LocalizationManager.Instance.T(key);
+            }
+            else if (clean.Equals("ACCESS DENIED", StringComparison.OrdinalIgnoreCase))
+            {
+                tmp.text = LocalizationManager.Instance.T("login_access_denied", "ACCESS DENIED");
+            }
+            else if (clean.Equals("USER ID", StringComparison.OrdinalIgnoreCase))
+            {
+                tmp.text = LocalizationManager.Instance.T("login_user_id", "USER ID");
+            }
+            else if (clean.Equals("PASSWORD", StringComparison.OrdinalIgnoreCase))
+            {
+                tmp.text = LocalizationManager.Instance.T("login_password", "PASSWORD");
             }
         }
     }

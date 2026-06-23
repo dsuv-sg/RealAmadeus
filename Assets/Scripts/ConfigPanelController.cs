@@ -60,6 +60,10 @@ public class ConfigPanelController : MonoBehaviour
     [Header("Ollama Settings")]
     public TMP_InputField ollamaHostInputField;
 
+    [Header("API Config (New)")]
+    public UnityEngine.UI.Toggle openaiCompatibleToggle;
+    public TMP_InputField openaiBaseUrlField;
+
     [Header("Native Experimental Settings (No Python / No Server)")]    public Toggle toolsEnabledToggle;
     public Toggle nativeTtsEnabledToggle;
     public Toggle nativeTtsGpuToggle;
@@ -103,6 +107,8 @@ public class ConfigPanelController : MonoBehaviour
     private const string PREF_VERTEX_PROJECT = "Config_VertexProject";
     private const string PREF_VERTEX_LOCATION = "Config_VertexLocation";
     private const string PREF_OLLAMA_HOST = "Config_OllamaHost";
+    private const string PREF_OPENAI_COMPATIBLE = "Config_OpenAICompatible";
+    private const string PREF_OPENAI_BASE_URL = "Config_OpenAIBaseUrl";
     
     public const string PREF_TOOLS_ENABLED = "Config_Experimental_ToolCalling_Enabled";
     private const string PREF_DESKTOP_BACKGROUND_MODE = "Config_Experimental_DesktopBackgroundMode";
@@ -192,6 +198,7 @@ public class ConfigPanelController : MonoBehaviour
 
         if (vertexAuthButton) vertexAuthButton.onClick.AddListener(OnVertexAuthClicked);
         if (vertexUseGcloudToggle) vertexUseGcloudToggle.onValueChanged.AddListener((val) => UpdateProviderFieldsVisibility(currentApiProviderIndex));
+        if (openaiCompatibleToggle) openaiCompatibleToggle.onValueChanged.AddListener((val) => UpdateProviderFieldsVisibility(currentApiProviderIndex));
     }
 
     private void OnVertexAuthClicked()
@@ -393,6 +400,8 @@ public class ConfigPanelController : MonoBehaviour
         if (vertexClientIdInputField) vertexClientIdInputField.text = PlayerPrefs.GetString(VertexOAuthService.PREF_VERTEX_CLIENT_ID, "");
         if (vertexUseGcloudToggle) vertexUseGcloudToggle.isOn = PlayerPrefs.GetInt("Config_VertexUseGcloud", 0) == 1;
         if (desktopBackgroundModeToggle) desktopBackgroundModeToggle.isOn = PlayerPrefs.GetInt(PREF_DESKTOP_BACKGROUND_MODE, 0) == 1;
+        if (openaiCompatibleToggle) openaiCompatibleToggle.isOn = PlayerPrefs.GetInt(PREF_OPENAI_COMPATIBLE, 0) == 1;
+        if (openaiBaseUrlField) openaiBaseUrlField.text = PlayerPrefs.GetString(PREF_OPENAI_BASE_URL, "");
 
         UpdateProviderFieldsVisibility(currentApiProviderIndex);
         ApplyConfigLanguage(currentLanguageIndex);
@@ -452,6 +461,7 @@ public class ConfigPanelController : MonoBehaviour
     {
         bool isVertex = (providerIndex == 4);   // PROVIDER_VERTEX
         bool isOllama = (providerIndex == 5);   // PROVIDER_OLLAMA
+        bool isOpenAI = (providerIndex == 0);   // PROVIDER_OPENAI
 
         if (vertexProjectInputField) vertexProjectInputField.transform.parent.gameObject.SetActive(isVertex);
         if (vertexLocationInputField) vertexLocationInputField.transform.parent.gameObject.SetActive(isVertex);
@@ -464,16 +474,25 @@ public class ConfigPanelController : MonoBehaviour
         if (vertexClientIdInputField) vertexClientIdInputField.transform.parent.gameObject.SetActive(false);
         if (vertexUseGcloudToggle) vertexUseGcloudToggle.transform.parent.gameObject.SetActive(false);
         
-        // Hide unused manual Client ID field and Use GCloud toggle UI, as gcloud is now forced
-        if (vertexClientIdInputField) vertexClientIdInputField.transform.parent.gameObject.SetActive(false);
-        if (vertexUseGcloudToggle) vertexUseGcloudToggle.transform.parent.gameObject.SetActive(false);
-        
         // Only show Auth button for desktop
 #if UNITY_WEBGL && !UNITY_EDITOR
         if (vertexAuthButton) vertexAuthButton.gameObject.SetActive(false);
 #else
         if (vertexAuthButton) vertexAuthButton.gameObject.SetActive(isVertex);
 #endif
+
+        if (openaiCompatibleToggle)
+        {
+            openaiCompatibleToggle.transform.parent.gameObject.SetActive(isOpenAI);
+        }
+        if (openaiBaseUrlField)
+        {
+            bool showUrlField = isOpenAI && openaiCompatibleToggle != null && openaiCompatibleToggle.isOn;
+            openaiBaseUrlField.transform.parent.gameObject.SetActive(showUrlField);
+            
+            var exampleObj = openaiBaseUrlField.transform.parent.parent.Find("OpenAIBaseUrlExample");
+            if (exampleObj != null) exampleObj.gameObject.SetActive(showUrlField);
+        }
     }
 
     private void SaveSettings()
@@ -533,6 +552,8 @@ public class ConfigPanelController : MonoBehaviour
         if (vertexClientIdInputField) PlayerPrefs.SetString(VertexOAuthService.PREF_VERTEX_CLIENT_ID, vertexClientIdInputField.text);
         if (vertexUseGcloudToggle) PlayerPrefs.SetInt("Config_VertexUseGcloud", vertexUseGcloudToggle.isOn ? 1 : 0);
         if (desktopBackgroundModeToggle) PlayerPrefs.SetInt(PREF_DESKTOP_BACKGROUND_MODE, desktopBackgroundModeToggle.isOn ? 1 : 0);
+        if (openaiCompatibleToggle) PlayerPrefs.SetInt(PREF_OPENAI_COMPATIBLE, openaiCompatibleToggle.isOn ? 1 : 0);
+        if (openaiBaseUrlField) PlayerPrefs.SetString(PREF_OPENAI_BASE_URL, openaiBaseUrlField.text.Trim());
 
         // Save experimental settings
         SaveExperimentalSettings();
@@ -676,7 +697,7 @@ public class ConfigPanelController : MonoBehaviour
     {
         if (languageDropdown == null) return;
 
-        int keepIndex = Mathf.Clamp(currentLanguageIndex, 0, 7);
+        int keepIndex = Mathf.Clamp(currentLanguageIndex, 0, 10);
         languageDropdown.ClearOptions();
         languageDropdown.AddOptions(new List<string>
         {
@@ -687,34 +708,38 @@ public class ConfigPanelController : MonoBehaviour
             "Español",
             "Français",
             "Deutsch",
-            "Русский"
+            "Русский",
+            "Українська",
+            "Português",
+            "Türkçe"
         });
         languageDropdown.SetValueWithoutNotify(keepIndex);
     }
 
     private string GetLocalizedCategoryHeader(int index)
     {
-        switch (index)
+        string[] categories = { "category_system", "category_text", "category_sound", "category_graphics", "category_api", "category_experimental" };
+        if (index >= 0 && index < categories.Length)
         {
-            case 0: return Localize("システム", "System", "系统", "시스템", "Sistema", "Système", "System", "Система");
-            case 1: return Localize("テキスト", "Text", "文本", "텍스트", "Texto", "Texte", "Text", "Текст");
-            case 2: return Localize("サウンド", "Sound", "音频", "사운드", "Sonido", "Son", "Sound", "Звук");
-            case 3: return Localize("グラフィック", "Graphics", "图像", "그래픽", "Gráficos", "Graphismes", "Grafik", "Графика");
-            case 4: return Localize("API", "API", "API", "API", "API", "API", "API", "API");
-            default: return Localize("試験的機能", "Experimental", "试验性功能", "실험적 기능", "Experimental", "Expérimental", "Experimentell", "Эксперимент");
+            return LocalizationManager.Instance.T(categories[index]);
         }
+        return string.Empty;
     }
 
     private void ApplyConfigLanguage(int languageIndex)
     {
-        currentLanguageIndex = Mathf.Clamp(languageIndex, 0, 7);
+        currentLanguageIndex = Mathf.Clamp(languageIndex, 0, 10);
+        if (LocalizationManager.Instance != null)
+        {
+            LocalizationManager.Instance.SetLanguage(currentLanguageIndex);
+        }
         bool toEnglish = currentLanguageIndex != 0;
 
         RefreshLanguageDropdownOptions();
 
         if (languageLabelText != null)
         {
-            languageLabelText.text = GetSpacingTaggedText(Localize("表示言語", "Display Language", "显示语言", "표시 언어", "Idioma", "Langue", "Sprache", "Язык"));
+            languageLabelText.text = GetSpacingTaggedText(LocalizationManager.Instance.T("setting_display_language", "Display Language"));
         }
 
         if (headerText != null)
@@ -741,39 +766,29 @@ public class ConfigPanelController : MonoBehaviour
 
         var status = FindObjectOfType<StatusPanelController>(true);
         if (status != null) status.UpdateLanguage();
+
+        var menu = FindObjectOfType<MenuPanelController>(true);
+        if (menu != null) menu.UpdateLanguage();
+
+        var manager = FindObjectOfType<Manager>(true);
+        if (manager != null) manager.UpdateLanguage();
+
+        var confirm = FindObjectOfType<ConfirmationDialog>(true);
+        if (confirm != null) confirm.UpdateLanguage();
     }
 
     private void UpdateCategoryButtonTexts(int languageIndex)
     {
         if (categoryButtons == null) return;
+        string[] categories = { "category_system", "category_text", "category_sound", "category_graphics", "category_api", "category_experimental" };
 
-        string[] ja = { "システム", "テキスト", "サウンド", "グラフィック", "API", "試験的機能" };
-        string[] en = { "System", "Text", "Sound", "Graphics", "API", "Experimental" };
-        string[] zh = { "系统", "文本", "音频", "图像", "API", "试验性功能" };
-        string[] ko = { "시스템", "텍스트", "사운드", "그래픽", "API", "실험적 기능" };
-        string[] es = { "Sistema", "Texto", "Sonido", "Gráficos", "API", "Experimental" };
-        string[] fr = { "Système", "Texte", "Son", "Graphismes", "API", "Expérimental" };
-        string[] de = { "System", "Text", "Sound", "Grafik", "API", "Experimentell" };
-        string[] ru = { "Система", "Текст", "Звук", "Графика", "API", "Эксперимент" };
-
-        for (int i = 0; i < categoryButtons.Count && i < ja.Length; i++)
+        for (int i = 0; i < categoryButtons.Count && i < categories.Length; i++)
         {
             if (categoryButtons[i] == null) continue;
             var tmp = categoryButtons[i].GetComponentInChildren<TextMeshProUGUI>(true);
             if (tmp != null)
             {
-                switch (languageIndex)
-                {
-                    case 0: tmp.text = ja[i]; break;
-                    case 1: tmp.text = en[i]; break;
-                    case 2: tmp.text = zh[i]; break;
-                    case 3: tmp.text = ko[i]; break;
-                    case 4: tmp.text = es[i]; break;
-                    case 5: tmp.text = fr[i]; break;
-                    case 6: tmp.text = de[i]; break;
-                    case 7: tmp.text = GetSpacingTaggedText(ru[i]); break;
-                    default: tmp.text = en[i]; break;
-                }
+                tmp.text = GetSpacingTaggedText(LocalizationManager.Instance.T(categories[i]));
             }
         }
     }
@@ -783,94 +798,73 @@ public class ConfigPanelController : MonoBehaviour
         if (saveButton != null)
         {
             var tmp = saveButton.GetComponentInChildren<TextMeshProUGUI>(true);
-            if (tmp != null) tmp.text = GetSpacingTaggedText(Localize("適用", "Apply", "应用", "적용", "Aplicar", "Appliquer", "Anwenden", "Применить"));
+            if (tmp != null)
+            {
+                string text = LocalizationManager.Instance.T("apply", "Apply");
+                if (languageIndex == LocalizationManager.LANG_UK)
+                {
+                    tmp.text = $"<cspace=-11.0px>{text}</cspace>";
+                }
+                else
+                {
+                    tmp.text = GetSpacingTaggedText(text);
+                }
+            }
         }
 
         if (cancelButton != null)
         {
             var tmp = cancelButton.GetComponentInChildren<TextMeshProUGUI>(true);
-            if (tmp != null) tmp.text = GetSpacingTaggedText(Localize("キャンセル", "Cancel", "取消", "취소", "Cancelar", "Annuler", "Abbrechen", "Отмена"));
+            if (tmp != null)
+            {
+                string text = LocalizationManager.Instance.T("cancel", "Cancel");
+                if (languageIndex == LocalizationManager.LANG_UK)
+                {
+                    tmp.text = $"<cspace=-11.0px>{text}</cspace>";
+                }
+                else
+                {
+                    tmp.text = GetSpacingTaggedText(text);
+                }
+            }
         }
     }
 
-    private string Localize(string ja, string en, string zh, string ko, string es, string fr, string de, string ru)
-    {
-        switch (currentLanguageIndex)
-        {
-            case 0: return ja;
-            case 1: return en;
-            case 2: return zh;
-            case 3: return ko;
-            case 4: return es;
-            case 5: return fr;
-            case 6: return de;
-            case 7: return ru;
-            default: return en;
-        }
-    }
+    private System.Collections.Generic.Dictionary<TextMeshProUGUI, string> configComponentToKey = new System.Collections.Generic.Dictionary<TextMeshProUGUI, string>();
 
     private void UpdateConfigLabelTexts(int index)
     {
-        var map = new System.Collections.Generic.List<string[]>
-        {
-            new string[] { "起動画面スキップ", "Skip Loading Screen", "跳过启动画面", "로딩 화면 스킵", "Saltar pantalla de carga", "Passer l'écran de chargement", "Ladebildschirm überspringen", "Пропускать экран загрузки" },
-            new string[] { "右クリックメニュー", "Right Click Menu", "右键菜单", "우클릭 메뉴", "Menú clic derecho", "Menu clic droit", "Rechtsklick-Menü", "Меню правой кнопки мыши" },
-            new string[] { "通知を表示", "Show Notifications", "显示通知", "알림 표시", "Mostrar notificaciones", "Afficher les notifications", "Benachrichtigungen anzeigen", "Показывать уведомления" },
-            new string[] { "軽量化モード", "Lightweight Mode", "轻量模式", "경량 모드", "Modo ligero", "Mode léger", "Leichtmodus", "Легкий режим" },
-            new string[] { "視線トラッキング", "Eye Tracking", "视线追踪", "시선 추적", "Seguimiento de ojos", "Suivi oculaire", "Blick-Tracking", "Трекинг взгляда" },
-            new string[] { "文字表示速度", "Text Speed", "文字速度", "텍스트 속도", "Velocidad de texto", "Vitesse du texte", "Textgeschwindigkeit", "Скорость текста" },
-            new string[] { "オート表示", "Auto Mode", "自动模式", "자동 모드", "Modo automático", "Mode automatique", "Auto-Modus", "Авторежим" },
-            new string[] { "オート待機時間", "Auto Wait Time", "自动等待时间", "자동 대기 시간", "Tiempo de espera", "Temps d'attente", "Wartezeit", "Время ожидания" },
-            new string[] { "マスター音量", "Master Volume", "主音量", "마스터 볼륨", "Volumen maestro", "Volume principal", "Hauptlautstärke", "Громкость" },
-            new string[] { "BGM音量", "BGM Volume", "BGM音量", "BGM 볼륨", "Volumen BGM", "Volume BGM", "BGM-Lautstärke", "BGM" },
-            new string[] { "SE音量", "SE Volume", "音效音量", "SE 볼륨", "Volumen efectos", "Volume effets", "Effekte", "SE" },
-            new string[] { "ボイス音量", "Voice Volume", "语音音量", "음성 볼륨", "Volumen de voz", "Volume voix", "Stimme", "Голос" },
-            new string[] { "画面モード", "Screen Mode", "屏幕模式", "화면 모드", "Modo de pantalla", "Mode d'écran", "Bildschirmmodus", "Экран" },
-            new string[] { "解像度", "Resolution", "分辨率", "해상도", "Resolución", "Résolution", "Auflösung", "Разрешение" },
-            new string[] { "LLM APIプロバイダ", "LLM API Provider", "LLM提供商", "LLM 제공자", "Proveedor LLM", "Fournisseur LLM", "LLM-Anbieter", "Провайдер" },
-            new string[] { "LLM モデル名", "LLM Model Name", "模型名称", "모델명", "Nombre del modelo", "Nom du modèle", "Modellname", "Имя модели" },
-            new string[] { "LLM Web検索", "LLM Web Search", "网络搜索", "웹 검색", "Búsqueda web", "Recherche web", "Websuche", "Веб-поиск" },
-            new string[] { "※ Vertexを使用するためには、gCloud CLIのインストールが必要です。", "* gCloud CLI is required to use Vertex.", "* 使用Vertex需要安装gCloud CLI。", "* Vertex를 사용하려면 gCloud CLI가 필요합니다。", "* Se requiere gCloud CLI.", "* gCloud CLI est requis.", "* gCloud CLI wird benötigt.", "* Требуется gCloud CLI." },
-            new string[] { "TTS (音声合成)", "TTS (Speech)", "TTS (语音合成)", "TTS (음성 합성)", "TTS", "TTS", "TTS", "TTS (Синтез)" },
-            new string[] { "STT (音声認識)", "STT (Dictation)", "STT (语音识别)", "STT (음성 인식)", "STT", "STT", "STT", "STT (Распознавание)" },
-            new string[] { "知識ベース (RAG)", "Knowledge Base (RAG)", "知识库 (RAG)", "지식 베이스 (RAG)", "Base de conocimientos (RAG)", "Base de connaissances (RAG)", "Wissensdatenbank (RAG)", "База знаний (RAG)" },
-            new string[] { "デスクトップ背景モード", "Desktop Background Mode", "桌面背景模式", "데스크톱 배경 모드", "Modo de fondo de escritorio", "Mode d'arrière-plan du bureau", "Desktop-Hintergrundmodus", "Режим фона рабочего стола" },
-            // Native experimental labels
-            new string[] { "ネイティブTTS有効化", "Enable Native TTS", "启用原生TTS", "네이티브 TTS 활성화", "Habilitar TTS nativo", "Activer TTS natif", "Nativen TTS aktivieren", "Включить нативный TTS" },
-            new string[] { "TTS GPU推論", "TTS GPU Inference", "TTS GPU推理", "TTS GPU 추론", "Inferencia GPU TTS", "Inférence GPU TTS", "TTS-GPU-Inferenz", "TTS GPU-инференс" },
-            new string[] { "ネイティブSTT有効化", "Enable Native STT", "启用原生STT", "네이티브 STT 활성화", "Habilitar STT nativo", "Activer STT natif", "Nativen STT aktivieren", "Включить нативный STT" },
-            new string[] { "STT GPU推論", "STT GPU Inference", "STT GPU推理", "STT GPU 추론", "Inferencia GPU STT", "Inférence GPU STT", "STT-GPU-Inferenz", "STT GPU-инференс" },
-            new string[] { "ネイティブSTT言語", "Native STT Language", "原生STT语言", "네이티브 STT 언어", "Idioma STT nativo", "Langue STT native", "Native STT-Sprache", "Язык нативного STT" },
-            new string[] { "ネイティブRAG有効化", "Enable Native RAG", "启用原生RAG", "네이티브 RAG 활성화", "Habilitar RAG nativo", "Activer RAG natif", "Nativen RAG aktivieren", "Включить нативный RAG" },
-            new string[] { "ネイティブRAG上位件数", "Native RAG Top-K", "原生RAG排名前K条", "네이티브 RAG 상위 K", "Top-K de RAG nativo", "Top-K du RAG natif", "Nativer RAG Top-K", "Топ-K нативного RAG" },
-            new string[] { "ネイティブRAG類似度閾値", "Native RAG Threshold", "原生RAG相似度阈值", "네이티브 RAG 유사도 임계값", "Umbral de RAG nativo", "Seuil de RAG natif", "Nativer RAG-Schwelle", "Порог нативного RAG" },
-            // Provider URL labels
-            new string[] { "Ollama Host", "Ollama Host", "Ollama主机", "Ollama 호스트", "Host de Ollama", "Hôte Ollama", "Ollama-Host", "Ollama хост" }
-        };
-
         var texts = GetComponentsInChildren<TextMeshProUGUI>(true);
         foreach (var tmp in texts)
         {
             if (tmp == null || string.IsNullOrEmpty(tmp.text)) continue;
+            // Skip dropdown and other dynamic elements
+            if (tmp.transform.parent != null && tmp.transform.parent.name.Contains("Dropdown")) continue;
 
-            string tText = tmp.text.Trim();
-            // Strip TMP rich-text tags (e.g. <cspace>) so we can match against plain mapping strings
-            string strippedText = System.Text.RegularExpressions.Regex.Replace(tText, @"<[^>]+>", "").Trim();
-            foreach (var mapping in map)
+            if (!configComponentToKey.ContainsKey(tmp))
             {
-                bool found = false;
-                foreach (var str in mapping)
+                string clean = System.Text.RegularExpressions.Regex.Replace(tmp.text, @"<[^>]+>", "").Trim();
+                string key = LocalizationManager.Instance.LookupKey(clean);
+                configComponentToKey[tmp] = key;
+            }
+            string resolvedKey = configComponentToKey[tmp];
+            if (resolvedKey != null)
+            {
+                tmp.text = GetSpacingTaggedText(LocalizationManager.Instance.T(resolvedKey));
+                
+                // Only enable wrapping if it is a row Label (matches QML ConfigRow / ConfigSliderRow labels)
+                if (tmp.gameObject.name == "Label")
                 {
-                    if (strippedText == str)
+                    tmp.textWrappingMode = TextWrappingModes.Normal;
+                    var rect = tmp.GetComponent<RectTransform>();
+                    if (rect != null)
                     {
-                        found = true;
-                        break;
+                        // To prevent shifting dropdowns/checkboxes/sliders in the HorizontalLayoutGroup,
+                        // we keep the RectTransform width at its original value (100f) but set a negative right margin
+                        // on TextMeshPro so that the text wrapping area is 400f wide (matching the Qt version).
+                        float rightMargin = rect.rect.width - 400f;
+                        tmp.margin = new Vector4(tmp.margin.x, tmp.margin.y, rightMargin, tmp.margin.w);
                     }
-                }
-                if (found)
-                {
-                    tmp.text = GetSpacingTaggedText(mapping[Mathf.Clamp(index, 0, 7)]);
-                    break;
                 }
             }
         }
@@ -878,19 +872,22 @@ public class ConfigPanelController : MonoBehaviour
         if (screenModeDropdown != null)
         {
             int idx = screenModeDropdown.value;
-            screenModeDropdown.ClearOptions();
-            var options = new List<string> { "Fullscreen", "Windowed", "Borderless" };
-            
-            options = new List<string> {
-                Localize("フルスクリーン", "Fullscreen", "全屏", "전체 화면", "Pantalla completa", "Plein écran", "Vollbild", "Полный экран"),
-                Localize("ウィンドウ", "Windowed", "窗口模式", "창 모드", "Modo ventana", "Mode fenêtré", "Fenstermodus", "Оконный режим"),
-                "Borderless" // Keep borderless but as is
+            var options = new List<string> {
+                LocalizationManager.Instance.T("screen_mode_fullscreen", "Fullscreen"),
+                LocalizationManager.Instance.T("screen_mode_windowed", "Windowed")
             };
-            
+            // Keep borderless if option was present originally (usually 3 options)
+            if (screenModeDropdown.options.Count > 2 || idx == 2)
+            {
+                options.Add(LocalizationManager.Instance.T("screen_mode_borderless", "Borderless"));
+            }
+            screenModeDropdown.ClearOptions();
             screenModeDropdown.AddOptions(options);
             screenModeDropdown.SetValueWithoutNotify(Mathf.Clamp(idx, 0, screenModeDropdown.options.Count - 1));
         }
     }
+
+
 
     private static int GetIntWithLegacy(string primaryKey, string legacyKey, int defaultValue)
     {
@@ -942,7 +939,6 @@ public class ConfigPanelController : MonoBehaviour
 
     private string GetSpacingTaggedText(string text)
     {
-        if (currentLanguageIndex != 7 || string.IsNullOrEmpty(text)) return text;
-        return System.Text.RegularExpressions.Regex.Replace(text, @"([\u0400-\u04FF]+)", "<cspace=-9.4px>$1</cspace>");
+        return LocalizationManager.Instance.GetSpacingTaggedText(text, currentLanguageIndex);
     }
 }

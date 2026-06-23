@@ -21,6 +21,7 @@ public class StatusPanelController : MonoBehaviour
     public TextMeshProUGUI nativeTtsText; // [NEW] Displays Native TTS status
     public TextMeshProUGUI nativeSttText; // [NEW] Displays Native STT status
     public TextMeshProUGUI nativeRagText; // [NEW] Displays Native RAG status
+    public TextMeshProUGUI operatorText; // [NEW] Displays Operator Name
 
     [Header("Dynamic Bars")]
     public Slider syncSlider;
@@ -40,6 +41,8 @@ public class StatusPanelController : MonoBehaviour
     private DateTime lastCpuTimeCheck;
     private float currentCpuUsage = 0f;
 
+    private Coroutine cpuRoutine;
+
     void Awake()
     {
         if (panelCanvasGroup == null) panelCanvasGroup = GetComponent<CanvasGroup>();
@@ -51,7 +54,6 @@ public class StatusPanelController : MonoBehaviour
             panelCanvasGroup.interactable = false;
             panelCanvasGroup.blocksRaycasts = false;
         }
-        gameObject.SetActive(false);
 
         if (closeButton == null)
         {
@@ -62,41 +64,54 @@ public class StatusPanelController : MonoBehaviour
         if (closeButton) closeButton.onClick.AddListener(OnCloseClicked);
 
         // Init Diagnostics
-        currentProcess = System.Diagnostics.Process.GetCurrentProcess();
-        lastTotalProcessorTime = currentProcess.TotalProcessorTime;
-        lastCpuTimeCheck = DateTime.Now;
-        StartCoroutine(UpdateCpuUsageRoutine());
+        try
+        {
+            currentProcess = System.Diagnostics.Process.GetCurrentProcess();
+        }
+        catch (System.Exception ex)
+        {
+            Debug.LogWarning("Failed to get current process diagnostics: " + ex.Message);
+        }
 
         // Auto-link network text if missing
-        if (networkText == null)
-        {
-            Transform rt = transform.Find("InfoGrid/LeftCol/Row_NETWORK/Text");
-            if (rt == null) 
-            {
-                // Try to find the second Text object with the positive local x position
-                Transform row = transform.Find("InfoGrid/LeftCol/Row_NETWORK");
-                if (row != null)
-                {
-                    foreach (Transform child in row)
-                    {
-                        if (child.name == "Text" && child.localPosition.x > 0)
-                        {
-                            rt = child;
-                            break;
-                        }
-                    }
-                }
-            }
-        if (rt != null)
-        {
-            networkText = rt.GetComponent<TextMeshProUGUI>();
-        }
-    }
+        AutoLinkStatusText("Row_NETWORK", ref networkText);
+
+        // Auto-link operator text if missing
+        AutoLinkStatusText("Row_OPERATOR", ref operatorText);
 
         // Auto-link native feature status texts if missing
         AutoLinkStatusText("Row_NATIVE_TTS", ref nativeTtsText);
         AutoLinkStatusText("Row_NATIVE_STT", ref nativeSttText);
         AutoLinkStatusText("Row_NATIVE_RAG", ref nativeRagText);
+
+        gameObject.SetActive(false);
+    }
+
+    void OnEnable()
+    {
+        if (currentProcess != null)
+        {
+            try
+            {
+                lastTotalProcessorTime = currentProcess.TotalProcessorTime;
+                lastCpuTimeCheck = System.DateTime.Now;
+                if (cpuRoutine != null) StopCoroutine(cpuRoutine);
+                cpuRoutine = StartCoroutine(UpdateCpuUsageRoutine());
+            }
+            catch (System.Exception ex)
+            {
+                Debug.LogWarning("Failed to start CPU diagnostics routine: " + ex.Message);
+            }
+        }
+    }
+
+    void OnDisable()
+    {
+        if (cpuRoutine != null)
+        {
+            StopCoroutine(cpuRoutine);
+            cpuRoutine = null;
+        }
     }
 
     private void AutoLinkStatusText(string rowName, ref TextMeshProUGUI target)
@@ -107,16 +122,42 @@ public class StatusPanelController : MonoBehaviour
         if (row == null) row = transform.Find(rowName);
         if (row != null)
         {
-            foreach (Transform child in row)
+            if (row.childCount >= 2)
             {
-                if (child.name == "Text" && child.localPosition.x > 0)
+                target = row.GetChild(1).GetComponent<TextMeshProUGUI>();
+            }
+            if (target == null)
+            {
+                foreach (Transform child in row)
                 {
-                    target = child.GetComponent<TextMeshProUGUI>();
-                    break;
+                    if (child.name == "Text" && child.localPosition.x > 0)
+                    {
+                        target = child.GetComponent<TextMeshProUGUI>();
+                        break;
+                    }
                 }
             }
             if (target == null)
+            {
                 target = row.GetComponentInChildren<TextMeshProUGUI>();
+            }
+        }
+    }
+
+    public void SetOperatorName(string name)
+    {
+        EnsureOperatorTextLinked();
+        if (operatorText != null)
+        {
+            operatorText.text = name;
+        }
+    }
+
+    private void EnsureOperatorTextLinked()
+    {
+        if (operatorText == null)
+        {
+            AutoLinkStatusText("Row_OPERATOR", ref operatorText);
         }
     }
 
@@ -215,11 +256,11 @@ public class StatusPanelController : MonoBehaviour
         {
             if (Application.internetReachability == NetworkReachability.NotReachable)
             {
-                networkText.text = "<color=#FF4444>OFFLINE</color>";
+                networkText.text = $"<color=#FF4444>{LocalizationManager.Instance.T("status_offline", "OFFLINE")}</color>";
             }
             else
             {
-                networkText.text = "<color=#44FF44>ONLINE</color>";
+                networkText.text = $"<color=#44FF44>{LocalizationManager.Instance.T("status_online", "ONLINE")}</color>";
             }
         }
 
@@ -230,10 +271,10 @@ public class StatusPanelController : MonoBehaviour
     private void UpdateNativeFeatureStatus()
     {
         int lang = PlayerPrefs.GetInt("Config_Language", 0);
-        string on = lang == 0 ? "ON" : "ON";
-        string off = lang == 0 ? "OFF" : "OFF";
-        string gpu = lang == 0 ? "GPU" : "GPU";
-        string cpu = lang == 0 ? "CPU" : "CPU";
+        string on = "ON";
+        string off = "OFF";
+        string gpu = "GPU";
+        string cpu = "CPU";
 
         // Native TTS
         if (nativeTtsText)
@@ -331,34 +372,29 @@ public class StatusPanelController : MonoBehaviour
     /// <summary>
     /// Refreshes the text content based on the current language setting.
     /// </summary>
+    private System.Collections.Generic.Dictionary<TextMeshProUGUI, string> statusComponentToKey = new System.Collections.Generic.Dictionary<TextMeshProUGUI, string>();
     public void UpdateLanguage()
     {
+        EnsureOperatorTextLinked();
         int langIdx = PlayerPrefs.GetInt("Config_Language", 0);
-        string getTr(string ja, string en, string zh, string ko, string es, string fr, string de, string ru)
+        var texts = GetComponentsInChildren<TextMeshProUGUI>(true);
+        foreach (var tmp in texts)
         {
-            if (langIdx == 1) return en;
-            if (langIdx == 2) return zh;
-            if (langIdx == 3) return ko;
-            if (langIdx == 4) return es;
-            if (langIdx == 5) return fr;
-            if (langIdx == 6) return de;
-            if (langIdx == 7) return ru;
-            return ja;
-        }
+            if (tmp == null || string.IsNullOrEmpty(tmp.text)) continue;
+            // Skip dynamic values
+            if (tmp == clockText || tmp == cpuText || tmp == memoryText || tmp == llmInfoText || tmp == latencyText || tmp == networkText || tmp == nativeTtsText || tmp == nativeSttText || tmp == nativeRagText || tmp == operatorText) continue;
 
-        string Close_JA = "閉じる";
-        string Close_EN = "Close";
-        string Close_ZH = "关闭";
-        string Close_KO = "닫기";
-        string Close_ES = "Cerrar";
-        string Close_FR = "Fermer";
-        string Close_DE = "Schließen";
-        string Close_RU = "Закрыть";
-
-        var closeButtonText = ResolveCloseButtonText();
-        if (closeButtonText != null)
-        {
-            closeButtonText.text = GetSpacingTaggedText(getTr(Close_JA, Close_EN, Close_ZH, Close_KO, Close_ES, Close_FR, Close_DE, Close_RU), langIdx);
+            if (!statusComponentToKey.ContainsKey(tmp))
+            {
+                string clean = System.Text.RegularExpressions.Regex.Replace(tmp.text, @"<[^>]+>", "").Trim();
+                string key = LocalizationManager.Instance.LookupKey(clean);
+                statusComponentToKey[tmp] = key;
+            }
+            string resolvedKey = statusComponentToKey[tmp];
+            if (resolvedKey != null)
+            {
+                tmp.text = GetSpacingTaggedText(LocalizationManager.Instance.T(resolvedKey), langIdx);
+            }
         }
     }
 
@@ -390,7 +426,6 @@ public class StatusPanelController : MonoBehaviour
 
     private string GetSpacingTaggedText(string text, int lang)
     {
-        if (lang != 7 || string.IsNullOrEmpty(text)) return text;
-        return System.Text.RegularExpressions.Regex.Replace(text, @"([\u0400-\u04FF]+)", "<cspace=-8.4px>$1</cspace>");
+        return LocalizationManager.Instance.GetSpacingTaggedText(text, lang);
     }
 }

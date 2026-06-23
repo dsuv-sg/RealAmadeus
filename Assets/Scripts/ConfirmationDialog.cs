@@ -212,59 +212,13 @@ public class ConfirmationDialog : MonoBehaviour
     public void UpdateLanguage()
     {
         int langIdx = PlayerPrefs.GetInt("Config_Language", 0);
-        string[] yesArray = { "はい", "Yes", "是", "예", "Sí", "Oui", "Ja", "Да" };
-        string[] noArray = { "いいえ", "No", "否", "아니오", "No", "Non", "Nein", "Нет" };
-        
-        int idx = Mathf.Clamp(langIdx, 0, 7);
-        if (yesButtonText != null) yesButtonText.text = GetSpacingTaggedText(yesArray[idx], idx);
-        if (noButtonText != null) noButtonText.text = GetSpacingTaggedText(noArray[idx], idx);
-    }
-
-    private string GetCharType(char c, int lang)
-    {
-        int code = c;
-        if (code >= 0xAC00 && code <= 0xD7AF) return "hangul";
-        if (code >= 0x1100 && code <= 0x11FF) return "hangul";
-        if (code >= 0x3130 && code <= 0x318F) return "hangul";
-        if (lang == 7 && code >= 0x0400 && code <= 0x04FF) return "cyrillic";
-        return "other";
+        if (yesButtonText != null) yesButtonText.text = GetSpacingTaggedText(LocalizationManager.Instance.T("yes", "Yes"), langIdx);
+        if (noButtonText != null) noButtonText.text = GetSpacingTaggedText(LocalizationManager.Instance.T("no", "No"), langIdx);
     }
 
     private string GetSpacingTaggedText(string text, int lang)
     {
-        if (string.IsNullOrEmpty(text)) return text;
-
-        var result = new System.Text.StringBuilder();
-        string currentType = "";
-        var currentText = new System.Text.StringBuilder();
-
-        System.Action flush = () => {
-            if (currentText.Length == 0) return;
-            string run = currentText.ToString();
-            if (currentType == "cyrillic" && lang == 7)
-            {
-                result.Append("<cspace=-8.4px>").Append(run).Append("</cspace>");
-            }
-            else
-            {
-                result.Append(run);
-            }
-            currentText.Clear();
-        };
-
-        foreach (char c in text)
-        {
-            string type = GetCharType(c, lang);
-            if (type != currentType && currentText.Length > 0)
-            {
-                flush();
-            }
-            if (currentText.Length == 0) currentType = type;
-            currentText.Append(c);
-        }
-        flush();
-
-        return result.ToString();
+        return LocalizationManager.Instance.GetSpacingTaggedText(text, lang);
     }
 
     private void CreateBorderLines()

@@ -1,4 +1,4 @@
-using System.Collections;
+﻿using System.Collections;
 using UnityEngine;
 using UnityEngine.InputSystem;
 using UnityEngine.UI;
@@ -121,6 +121,7 @@ public class MenuPanelController : MonoBehaviour
         LinkButton(shutdownText?.gameObject, OnExitBtn);
         LinkButton(closeMenuText?.gameObject, OnCloseMenuBtn);
 
+        UpdateLanguage();
         UpdateVisuals();
     }
 
@@ -320,7 +321,7 @@ public class MenuPanelController : MonoBehaviour
             // Display CURRENT state as requested:
             // "現在の状態がフルスクリーンだったら、MenuPanelのFullScreenTextをFULL\nSCREEN"
             // "現在の状態がウィンドウだったら、MenuPanelのFullScreenTextをWINDOW"
-            fullscreenText.text = Screen.fullScreenMode != FullScreenMode.FullScreenWindow ? "WINDOW" : "FULL\nSCREEN";
+            UpdateFullscreenText();
             screenModeDropdown.value = Screen.fullScreenMode != FullScreenMode.FullScreenWindow ? 0 : 1;
         }
 
@@ -389,6 +390,7 @@ public class MenuPanelController : MonoBehaviour
         // Deselect any active input field
         EventSystem.current.SetSelectedGameObject(null);
         
+        UpdateLanguage();
         UpdateVisuals();
     }
 
@@ -501,7 +503,7 @@ public class MenuPanelController : MonoBehaviour
             PlayerPrefs.SetInt("Config_ScreenMode", 0);
         }
         PlayerPrefs.Save();
-        fullscreenText.text = Screen.fullScreenMode == FullScreenMode.FullScreenWindow ? "WINDOW" : "FULL\nSCREEN";
+        UpdateFullscreenText();
     }
 
     public void OnReturnTitle() => Debug.Log("Return Title");
@@ -562,27 +564,47 @@ public class MenuPanelController : MonoBehaviour
 
     private string GetLogoutConfirmMessage()
     {
-        int lang = PlayerPrefs.GetInt("Config_Language", 0);
-        if (lang == 1) return "Do you want to log out?";
-        if (lang == 2) return "您确定要登出吗？";
-        if (lang == 3) return "로그아웃하시겠습니까?";
-        if (lang == 4) return "¿Quieres cerrar sesión?";
-        if (lang == 5) return "Voulez-vous vous déconnecter?";
-        if (lang == 6) return "Möchten Sie sich abmelden?";
-        if (lang == 7) return "Вы хотите выйти?";
-        return "ログアウトしますか？";
+        return LocalizationManager.Instance.T("logout_confirm", "ログアウトしますか？");
     }
 
     private string GetExitConfirmMessage()
     {
-        int lang = PlayerPrefs.GetInt("Config_Language", 0);
-        if (lang == 1) return "Do you want to exit Real Amadeus?";
-        if (lang == 2) return "要退出Real Amadeus吗？";
-        if (lang == 3) return "Real Amadeus를 종료하시겠습니까?";
-        if (lang == 4) return "¿Quieres salir de Real Amadeus?";
-        if (lang == 5) return "Voulez-vous quitter Real Amadeus?";
-        if (lang == 6) return "Möchten Sie Real Amadeus beenden?";
-        if (lang == 7) return "Вы хотите выйти из Real Amadeus?";
-        return "リアルアマデウスを終了しますか？";
+        return LocalizationManager.Instance.T("exit_confirm", "リアルアマデウスを終了しますか？");
     }
+    private System.Collections.Generic.Dictionary<TextMeshProUGUI, string> menuComponentToKey = new System.Collections.Generic.Dictionary<TextMeshProUGUI, string>();
+    public void UpdateLanguage()
+    {
+        int lang = PlayerPrefs.GetInt("Config_Language", 0);
+        var texts = GetComponentsInChildren<TextMeshProUGUI>(true);
+        foreach (var tmp in texts)
+        {
+            if (tmp == null || string.IsNullOrEmpty(tmp.text)) continue;
+            if (tmp == fullscreenText || tmp == closeMenuText) continue;
+
+            if (!menuComponentToKey.ContainsKey(tmp))
+            {
+                string clean = System.Text.RegularExpressions.Regex.Replace(tmp.text, @"<[^>]+>", "").Trim();
+                string key = LocalizationManager.Instance.LookupKey(clean);
+                menuComponentToKey[tmp] = key;
+            }
+            string resolvedKey = menuComponentToKey[tmp];
+            if (resolvedKey != null)
+            {
+                tmp.text = LocalizationManager.Instance.T(resolvedKey);
+            }
+        }
+
+        if (closeMenuText != null) closeMenuText.text = LocalizationManager.Instance.T("menu_closemenu", "CLOSE");
+        UpdateFullscreenText();
+    }
+
+    private void UpdateFullscreenText()
+    {
+        if (fullscreenText == null) return;
+        bool isFullScreen = Screen.fullScreenMode == FullScreenMode.FullScreenWindow || Screen.fullScreenMode == FullScreenMode.ExclusiveFullScreen;
+        fullscreenText.text = isFullScreen ?
+            LocalizationManager.Instance.T("menu_windowed", "WINDOW") :
+            LocalizationManager.Instance.T("menu_fullscreen", "FULL\nSCREEN");
+    }
+
 }

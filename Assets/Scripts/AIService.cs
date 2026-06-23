@@ -23,6 +23,43 @@ public class AIService : MonoBehaviour
     private const string PREF_MODEL_NAME = "Config_ModelName";
     private const string PREF_MODEL_NAME_PREFIX = "Config_ModelName_";
     private const string PREF_WEB_SEARCH = "Config_WebSearch";
+    // V1.3U: OpenAI-compatible custom base URL
+    public const string PREF_OPENAI_COMPATIBLE = "Config_OpenAICompatible";
+    public const string PREF_OPENAI_BASE_URL = "Config_OpenAIBaseUrl";
+
+    // ─── V1.3U: in-flight cancellation ───
+    private UnityWebRequest currentRequest;
+    private Coroutine currentCoroutine;
+
+    public bool IsRequestInFlight => currentRequest != null || currentCoroutine != null;
+
+    public void CancelInFlightRequest()
+    {
+        try
+        {
+            if (currentCoroutine != null)
+            {
+                StopCoroutine(currentCoroutine);
+                currentCoroutine = null;
+            }
+            if (currentRequest != null)
+            {
+                Debug.Log("[AIService] Cancelling in-flight request.");
+                currentRequest.Abort();
+                currentRequest.Dispose();
+                currentRequest = null;
+            }
+        }
+        catch (Exception ex)
+        {
+            Debug.LogWarning("[AIService] CancelInFlightRequest: " + ex.Message);
+        }
+    }
+
+    private void OnDisable()
+    {
+        CancelInFlightRequest();
+    }
 
     // Provider indices (matching ConfigPanel dropdown order)
     private const int PROVIDER_OPENAI = 0;
@@ -77,8 +114,9 @@ public class AIService : MonoBehaviour
         string model = PlayerPrefs.GetString(PREF_MODEL_NAME_PREFIX + provider, "");
         if (string.IsNullOrEmpty(model)) model = PlayerPrefs.GetString(PREF_MODEL_NAME, "gpt-4o");
 
-        // Vertex AI uses gcloud tokens, not API keys
-        if (string.IsNullOrEmpty(apiKey) && provider != PROVIDER_VERTEX && provider != PROVIDER_OLLAMA && provider != PROVIDER_OPENROUTER)
+        // Vertex AI uses gcloud tokens, not API keys. OpenAI compatible mode and Ollama don't strictly require API keys.
+        bool isCompat = (provider == PROVIDER_OPENAI && PlayerPrefs.GetInt(PREF_OPENAI_COMPATIBLE, 0) == 1);
+        if (string.IsNullOrEmpty(apiKey) && provider != PROVIDER_VERTEX && provider != PROVIDER_OLLAMA && !isCompat)
         {
             onError?.Invoke("API Key が設定されていません。CONFIGから設定してください。");
             return;
@@ -87,35 +125,47 @@ public class AIService : MonoBehaviour
         switch (provider)
         {
             case PROVIDER_OPENAI:
-                StartCoroutine(SendOpenAI(apiKey, model, messages, onSuccess, onError));
+                {
+                    // V1.3U: when "Use Compatible API" is on, route to a custom base URL.
+                    string openAIUrl = null;
+                    if (PlayerPrefs.GetInt(PREF_OPENAI_COMPATIBLE, 0) == 1)
+                    {
+                        string baseUrl = PlayerPrefs.GetString(PREF_OPENAI_BASE_URL, "").Trim();
+                        if (!string.IsNullOrEmpty(baseUrl))
+                        {
+                            openAIUrl = baseUrl.TrimEnd('/') + "/chat/completions";
+                        }
+                    }
+                    currentCoroutine = StartCoroutine(SendOpenAI(apiKey, model, messages, onSuccess, onError, openAIUrl, false, true));
+                }
                 break;
             case PROVIDER_GEMINI:
-                StartCoroutine(SendGemini(apiKey, model, messages, onSuccess, onError));
+                currentCoroutine = StartCoroutine(SendGemini(apiKey, model, messages, onSuccess, onError));
                 break;
             case PROVIDER_CLAUDE:
-                StartCoroutine(SendClaude(apiKey, model, messages, onSuccess, onError));
+                currentCoroutine = StartCoroutine(SendClaude(apiKey, model, messages, onSuccess, onError));
                 break;
             case PROVIDER_GROQ:
                 if (IsWebSearchEnabled)
-                    StartCoroutine(SendGroqCompound(apiKey, messages, onSuccess, onError));
+                    currentCoroutine = StartCoroutine(SendGroqCompound(apiKey, messages, onSuccess, onError));
                 else
-                    StartCoroutine(SendGroq(apiKey, model, messages, onSuccess, onError));
+                    currentCoroutine = StartCoroutine(SendGroq(apiKey, model, messages, onSuccess, onError));
                 break;
             case PROVIDER_VERTEX:
                 string projectId = PlayerPrefs.GetString("Config_VertexProject", "");
                 string location = PlayerPrefs.GetString("Config_VertexLocation", "us-central1");
-                
+
 #if UNITY_WEBGL && !UNITY_EDITOR
-                onError?.Invoke("WebGL環境ではVertex AIはサポートされていません。");
+                onError?.Invoke(LocalizationManager.GetOrCreate().T("api_error_webgl_vertex"));
 #else
-                StartCoroutine(GetVertexAccessTokenGcloudAsync((vertexToken) =>
+                currentCoroutine = StartCoroutine(GetVertexAccessTokenGcloudAsync((vertexToken) =>
                 {
                     if (string.IsNullOrEmpty(vertexToken))
                     {
-                        onError?.Invoke("Vertex AI: アクセストークンの取得に失敗しました。\ngcloud CLI がインストールされ、gcloud auth login 済みか確認してください。");
+                        onError?.Invoke(LocalizationManager.GetOrCreate().T("api_error_vertex_token"));
                         return;
                     }
-                    StartCoroutine(SendVertexAI(vertexToken, projectId, location, model, messages, onSuccess, onError));
+                    currentCoroutine = StartCoroutine(SendVertexAI(vertexToken, projectId, location, model, messages, onSuccess, onError));
                 }));
 #endif
                 break;
@@ -123,11 +173,11 @@ public class AIService : MonoBehaviour
                 string ollamaHost = PlayerPrefs.GetString("Config_OllamaHost", "http://localhost:11434");
                 if (string.IsNullOrEmpty(ollamaHost)) ollamaHost = "http://localhost:11434";
                 string ollamaUrl = ollamaHost.TrimEnd('/') + "/v1/chat/completions";
-                StartCoroutine(SendOpenAI(apiKey, model, messages, onSuccess, onError, ollamaUrl));
+                currentCoroutine = StartCoroutine(SendOpenAI(apiKey, model, messages, onSuccess, onError, ollamaUrl));
                 break;
             case PROVIDER_OPENROUTER:
                 const string openrouterUrl = "https://openrouter.ai/api/v1/chat/completions";
-                StartCoroutine(SendOpenAI(apiKey, model, messages, onSuccess, onError, openrouterUrl, true));
+                currentCoroutine = StartCoroutine(SendOpenAI(apiKey, model, messages, onSuccess, onError, openrouterUrl, true));
                 break;
             default:
                 onError?.Invoke($"Unknown provider index: {provider}");
@@ -154,10 +204,11 @@ public class AIService : MonoBehaviour
         
         // Try provider-specific model first, fallback to legacy
         string model = PlayerPrefs.GetString(PREF_MODEL_NAME_PREFIX + provider, "");
-        if (string.IsNullOrEmpty(model)) model = PlayerPrefs.GetString(PREF_MODEL_NAME, "qwen3-32b");
+        if (string.IsNullOrEmpty(model)) model = PlayerPrefs.GetString(PREF_MODEL_NAME, "gpt-4o");
 
-        // Vertex AI uses gcloud tokens, not API keys
-        if (string.IsNullOrEmpty(apiKey) && provider != PROVIDER_VERTEX && provider != PROVIDER_OLLAMA && provider != PROVIDER_OPENROUTER)
+        // Vertex AI uses gcloud tokens, not API keys. OpenAI compatible mode and Ollama don't strictly require API keys.
+        bool isCompat = (provider == PROVIDER_OPENAI && PlayerPrefs.GetInt(PREF_OPENAI_COMPATIBLE, 0) == 1);
+        if (string.IsNullOrEmpty(apiKey) && provider != PROVIDER_VERTEX && provider != PROVIDER_OLLAMA && !isCompat)
         {
             onError?.Invoke("API Key が設定されていません。CONFIGから設定してください。");
             return;
@@ -166,9 +217,9 @@ public class AIService : MonoBehaviour
         if (provider == PROVIDER_GROQ)
         {
             if (IsWebSearchEnabled)
-                StartCoroutine(SendGroqCompoundStreaming(apiKey, messages, onToken, onComplete, onError));
+                currentCoroutine = StartCoroutine(SendGroqCompoundStreaming(apiKey, messages, onToken, onComplete, onError));
             else
-                StartCoroutine(SendGroqStreaming(apiKey, model, messages, onToken, onComplete, onError));
+                currentCoroutine = StartCoroutine(SendGroqStreaming(apiKey, model, messages, onToken, onComplete, onError));
         }
         else if (provider == PROVIDER_VERTEX)
         {
@@ -176,16 +227,16 @@ public class AIService : MonoBehaviour
             string location = PlayerPrefs.GetString("Config_VertexLocation", "us-central1");
 
 #if UNITY_WEBGL && !UNITY_EDITOR
-            onError?.Invoke("WebGL環境ではVertex AIはサポートされていません。");
+            onError?.Invoke(LocalizationManager.GetOrCreate().T("api_error_webgl_vertex"));
 #else
-            StartCoroutine(GetVertexAccessTokenGcloudAsync((vertexTokenStream) =>
+            currentCoroutine = StartCoroutine(GetVertexAccessTokenGcloudAsync((vertexTokenStream) =>
             {
                 if (string.IsNullOrEmpty(vertexTokenStream))
                 {
-                    onError?.Invoke("Vertex AI: アクセストークンの取得に失敗しました。\ngcloud CLI がインストールされ、gcloud auth login 済みか確認してください。");
+                    onError?.Invoke(LocalizationManager.GetOrCreate().T("api_error_vertex_token"));
                     return;
                 }
-                StartCoroutine(SendVertexAIStreaming(vertexTokenStream, projectId, location, model, messages, onToken, onComplete, onError));
+                currentCoroutine = StartCoroutine(SendVertexAIStreaming(vertexTokenStream, projectId, location, model, messages, onToken, onComplete, onError));
             }));
 #endif
         }
@@ -194,16 +245,27 @@ public class AIService : MonoBehaviour
             string ollamaHost = PlayerPrefs.GetString("Config_OllamaHost", "http://localhost:11434");
             if (string.IsNullOrEmpty(ollamaHost)) ollamaHost = "http://localhost:11434";
             string ollamaUrl = ollamaHost.TrimEnd('/') + "/v1/chat/completions";
-            StartCoroutine(SendOpenAIStreaming(apiKey, model, messages, onToken, onComplete, onError, ollamaUrl, false));
+            currentCoroutine = StartCoroutine(SendOpenAIStreaming(apiKey, model, messages, onToken, onComplete, onError, ollamaUrl, false));
         }
         else if (provider == PROVIDER_OPENROUTER)
         {
             const string openrouterUrl = "https://openrouter.ai/api/v1/chat/completions";
-            StartCoroutine(SendOpenAIStreaming(apiKey, model, messages, onToken, onComplete, onError, openrouterUrl, true));
+            currentCoroutine = StartCoroutine(SendOpenAIStreaming(apiKey, model, messages, onToken, onComplete, onError, openrouterUrl, true));
+        }
+        else if (provider == PROVIDER_OPENAI && PlayerPrefs.GetInt(PREF_OPENAI_COMPATIBLE, 0) == 1)
+        {
+            // V1.3U: when OpenAI-compatible mode is on, stream from the user's custom base URL.
+            string baseUrl = PlayerPrefs.GetString(PREF_OPENAI_BASE_URL, "").Trim();
+            string compatibleUrl = null;
+            if (!string.IsNullOrEmpty(baseUrl))
+            {
+                compatibleUrl = baseUrl.TrimEnd('/') + "/chat/completions";
+            }
+            currentCoroutine = StartCoroutine(SendOpenAIStreaming(apiKey, model, messages, onToken, onComplete, onError, compatibleUrl, false));
         }
         else
         {
-            // Fallback: use non-streaming for other providers (OpenAI, Gemini, Claude)
+            // Fallback: use non-streaming for other providers (OpenAI without compatible mode, Gemini, Claude)
             SendChat(messages, s => { onToken(s); onComplete(s); }, onError);
         }
     }
@@ -211,13 +273,13 @@ public class AIService : MonoBehaviour
     // ─────────────────────────────────────────
     // OpenAI (ChatCompletion API)
     // ─────────────────────────────────────────
-    private IEnumerator SendOpenAI(string apiKey, string model, List<ChatMessage> messages, Action<string> onSuccess, Action<string> onError, string urlOverride = null, bool isOpenRouter = false)
+    private IEnumerator SendOpenAI(string apiKey, string model, List<ChatMessage> messages, Action<string> onSuccess, Action<string> onError, string urlOverride = null, bool isOpenRouter = false, bool isOpenAICompatible = false)
     {
         string url = string.IsNullOrEmpty(urlOverride) ? "https://api.openai.com/v1/chat/completions" : urlOverride;
 
         string messagesJson = BuildOpenAIMessages(messages);
         string body;
-        if (PlayerPrefs.GetInt(ConfigPanelController.PREF_TOOLS_ENABLED, 0) == 1)
+        if (PlayerPrefs.GetInt(ConfigPanelController.PREF_TOOLS_ENABLED, 0) == 1 && !isOpenAICompatible)
         {
             string toolsJson = "[{\"type\":\"function\",\"function\":{\"name\":\"get_current_time\",\"description\":\"Get the current time to answer questions about what time it is.\",\"parameters\":{\"type\":\"object\",\"properties\":{},\"required\":[]}}}]";
             body = $"{{\"model\":\"{EscapeJson(model)}\",\"messages\":{messagesJson},\"max_tokens\":2048,\"tools\":{toolsJson}}}";
@@ -229,11 +291,15 @@ public class AIService : MonoBehaviour
 
         using (UnityWebRequest req = new UnityWebRequest(url, "POST"))
         {
+            currentRequest = req;
             byte[] bodyRaw = Encoding.UTF8.GetBytes(body);
             req.uploadHandler = new UploadHandlerRaw(bodyRaw);
             req.downloadHandler = new DownloadHandlerBuffer();
             req.SetRequestHeader("Content-Type", "application/json");
-            req.SetRequestHeader("Authorization", $"Bearer {apiKey}");
+            if (!string.IsNullOrEmpty(apiKey))
+            {
+                req.SetRequestHeader("Authorization", $"Bearer {apiKey}");
+            }
 
             if (isOpenRouter)
             {
@@ -244,9 +310,15 @@ public class AIService : MonoBehaviour
             req.timeout = 60;
 
             yield return req.SendWebRequest();
+            currentRequest = null;
 
             if (req.result != UnityWebRequest.Result.Success)
             {
+                if (req.result == UnityWebRequest.Result.ConnectionError && req.error == "Request aborted")
+                {
+                    Debug.Log("[AIService] Request aborted (likely cancelled).");
+                    yield break;
+                }
                 onError?.Invoke($"OpenAI Error: {req.error}\n{req.downloadHandler.text}");
             }
             else
@@ -656,11 +728,15 @@ public class AIService : MonoBehaviour
 
         using (UnityWebRequest req = new UnityWebRequest(url, "POST"))
         {
+            currentRequest = req;
             byte[] bodyRaw = Encoding.UTF8.GetBytes(body);
             req.uploadHandler = new UploadHandlerRaw(bodyRaw);
             req.downloadHandler = new DownloadHandlerBuffer();
             req.SetRequestHeader("Content-Type", "application/json");
-            req.SetRequestHeader("Authorization", $"Bearer {apiKey}");
+            if (!string.IsNullOrEmpty(apiKey))
+            {
+                req.SetRequestHeader("Authorization", $"Bearer {apiKey}");
+            }
             req.SetRequestHeader("Accept", "text/event-stream");
             req.timeout = 120;
 
@@ -705,34 +781,15 @@ public class AIService : MonoBehaviour
                 if (IsAppForeground()) yield return null;
                 else yield return new WaitForSecondsRealtime(0.05f);
             }
-
-            if (req.downloadHandler != null)
-            {
-                string finalData = req.downloadHandler.text;
-                if (finalData.Length > lastProcessedIndex)
-                {
-                    string remaining = finalData.Substring(lastProcessedIndex);
-                    string[] lines = remaining.Split('\n');
-                    foreach (string line in lines)
-                    {
-                        if (line.StartsWith("data: "))
-                        {
-                            string jsonChunk = line.Substring(6).Trim();
-                            if (jsonChunk == "[DONE]") continue;
-
-                            string token = ExtractStreamToken(jsonChunk);
-                            if (!string.IsNullOrEmpty(token))
-                            {
-                                fullResponse.Append(token);
-                                onToken?.Invoke(token);
-                            }
-                        }
-                    }
-                }
-            }
+            currentRequest = null;
 
             if (req.result != UnityWebRequest.Result.Success)
             {
+                if (req.result == UnityWebRequest.Result.ConnectionError && req.error == "Request aborted")
+                {
+                    Debug.Log("[AIService] Streaming request aborted (likely cancelled).");
+                    yield break;
+                }
                 onError?.Invoke($"OpenAI Streaming Error: {req.error}\n{req.downloadHandler?.text}");
             }
             else

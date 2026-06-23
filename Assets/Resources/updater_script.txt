@@ -1,0 +1,399 @@
+param(
+    [int]$ParentPid,
+    [string]$DownloadUrl,
+    [long]$AssetSize,
+    [string]$AppDir,
+    [string]$ExeName,
+    [int]$LangIndex = 0
+)
+
+Add-Type -AssemblyName System.Windows.Forms
+Add-Type -AssemblyName System.Drawing
+
+# Dictionary of localized strings (mirrors QT V1.3Q updatemanager.cpp)
+$Translations = @{
+    0 = @{ # ja (Japanese)
+        Title = "RealAmadeus アップデーター"
+        Preparing = "準備中..."
+        Downloading = "ファイルをダウンロード中..."
+        Extracting = "ファイルを展開中..."
+        Updating = "アプリを更新中..."
+        Cleaning = "一時ファイルを削除中..."
+        Completed = "RealAmadeus の更新が完了しました。`nOK を押すとアプリを再起動します。"
+        CompletedTitle = "更新完了 - RealAmadeus Updater"
+        DiskSpaceError = "ディスクの空き容量が不足しています。`n`n必要な空き容量: {0} MB`n現在の空き容量: {1} MB"
+        DiskSpaceErrorTitle = "エラー - RealAmadeus Updater"
+        DownloadError = "ダウンロード中にエラーが発生しました。`n`nエラー詳細: {0}"
+        ExtractError = "ファイルの展開中にエラーが発生しました。`n`nエラー詳細: {0}"
+        UpdateError = "ファイルの更新中にエラーが発生しました。`n一部のファイルが使用中か、書き込みアクセスが拒否されています。`n`nエラー詳細: {0}"
+        ErrorTitle = "エラー - RealAmadeus Updater"
+    }
+    1 = @{ # en (English)
+        Title = "RealAmadeus Updater"
+        Preparing = "Preparing..."
+        Downloading = "Downloading file..."
+        Extracting = "Extracting files..."
+        Updating = "Updating app..."
+        Cleaning = "Cleaning temporary files..."
+        Completed = "RealAmadeus has been updated successfully.`nClick OK to restart the application."
+        CompletedTitle = "Update Complete - RealAmadeus Updater"
+        DiskSpaceError = "Insufficient disk space.`n`nRequired: {0} MB`nAvailable: {1} MB"
+        DiskSpaceErrorTitle = "Error - RealAmadeus Updater"
+        DownloadError = "An error occurred during download.`n`nDetails: {0}"
+        ExtractError = "An error occurred during extraction.`n`nDetails: {0}"
+        UpdateError = "An error occurred during update.`nSome files may be in use or write access is denied.`n`nDetails: {0}"
+        ErrorTitle = "Error - RealAmadeus Updater"
+    }
+    2 = @{ # zh (Chinese)
+        Title = "RealAmadeus 更新程序"
+        Preparing = "准备中..."
+        Downloading = "正在下载文件..."
+        Extracting = "正在解压文件..."
+        Updating = "正在更新应用..."
+        Cleaning = "正在清理临时文件..."
+        Completed = "RealAmadeus 已成功更新。`n点击确定重启应用程序。"
+        CompletedTitle = "更新完成 - RealAmadeus Updater"
+        DiskSpaceError = "磁盘空间不足。`n`n需要: {0} MB`n可用: {1} MB"
+        DiskSpaceErrorTitle = "错误 - RealAmadeus Updater"
+        DownloadError = "下载过程中发生错误。`n`n错误详情: {0}"
+        ExtractError = "解压过程中发生错误。`n`n错误详情: {0}"
+        UpdateError = "更新过程中发生错误。`n某些文件可能正在使用或写入访问被拒绝。`n`n错误详情: {0}"
+        ErrorTitle = "错误 - RealAmadeus Updater"
+    }
+    3 = @{ # ko (Korean)
+        Title = "RealAmadeus 업데이터"
+        Preparing = "준비 중..."
+        Downloading = "파일 다운로드 중..."
+        Extracting = "파일 압축 해제 중..."
+        Updating = "앱 업데이트 중..."
+        Cleaning = "임시 파일 정리 중..."
+        Completed = "RealAmadeus 업데이트가 완료되었습니다.`n확인을 누르면 앱이 다시 시작됩니다."
+        CompletedTitle = "업데이트 완료 - RealAmadeus Updater"
+        DiskSpaceError = "디스크 공간이 부족합니다.`n`n필요 공간: {0} MB`n사용 가능 공간: {1} MB"
+        DiskSpaceErrorTitle = "오류 - RealAmadeus Updater"
+        DownloadError = "다운로드 중 오류가 발생했습니다.`n`n오류 세부 정보: {0}"
+        ExtractError = "압축 해제 중 오류가 발생했습니다.`n`n오류 세부 정보: {0}"
+        UpdateError = "업데이트 중 오류가 발생했습니다.`n일부 파일이 사용 중이거나 쓰기 권한이 거부되었습니다.`n`n오류 세부 정보: {0}"
+        ErrorTitle = "오류 - RealAmadeus Updater"
+    }
+    4 = @{ # es (Spanish)
+        Title = "RealAmadeus Actualizador"
+        Preparing = "Preparando..."
+        Downloading = "Descargando archivo..."
+        Extracting = "Extrayendo archivos..."
+        Updating = "Actualizando aplicación..."
+        Cleaning = "Limpiando archivos temporales..."
+        Completed = "RealAmadeus se ha actualizado correctamente.`nHaga clic en Aceptar para reiniciar la aplicación."
+        CompletedTitle = "Actualización completada - RealAmadeus Updater"
+        DiskSpaceError = "Espacio en disco insuficiente.`n`nRequerido: {0} MB`nDisponible: {1} MB"
+        DiskSpaceErrorTitle = "Error - RealAmadeus Updater"
+        DownloadError = "Ocurrió un error durante la descarga.`n`nDetalles: {0}"
+        ExtractError = "Ocurrió un error durante la extracción.`n`nDetalles: {0}"
+        UpdateError = "Ocurrió un error durante la actualización.`nEs posible que algunos archivos estén en uso o se haya denegado el acceso de escritura.`n`nDetalles: {0}"
+        ErrorTitle = "Error - RealAmadeus Updater"
+    }
+    5 = @{ # fr (French)
+        Title = "Mise à jour RealAmadeus"
+        Preparing = "Préparation..."
+        Downloading = "Téléchargement du fichier..."
+        Extracting = "Extraction des fichiers..."
+        Updating = "Mise à jour de l'application..."
+        Cleaning = "Nettoyage des fichiers temporaires..."
+        Completed = "RealAmadeus a été mis à jour avec succès.`nCliquez sur OK pour redémarrer l'application."
+        CompletedTitle = "Mise à jour terminée - RealAmadeus Updater"
+        DiskSpaceError = "Espace disque insuffisant.`n`nRequis: {0} MB`nDisponible: {1} MB"
+        DiskSpaceErrorTitle = "Erreur - RealAmadeus Updater"
+        DownloadError = "Une erreur est survenue lors du téléchargement.`n`nDétails: {0}"
+        ExtractError = "Une erreur est survenue lors de l'extraction.`n`nDétails: {0}"
+        UpdateError = "Une erreur est survenue lors de la mise à jour.`nCertains fichiers peuvent être en cours d'utilisation ou l'accès en écriture est refusé.`n`nDétails: {0}"
+        ErrorTitle = "Erreur - RealAmadeus Updater"
+    }
+    6 = @{ # de (German)
+        Title = "RealAmadeus Updater"
+        Preparing = "Vorbereitung..."
+        Downloading = "Datei wird heruntergeladen..."
+        Extracting = "Dateien werden entpackt..."
+        Updating = "App wird aktualisiert..."
+        Cleaning = "Temporäre Dateien werden gelöscht..."
+        Completed = "RealAmadeus wurde erfolgreich aktualisiert.`nKlicken Sie auf OK, um die Anwendung neu zu starten."
+        CompletedTitle = "Update abgeschlossen - RealAmadeus Updater"
+        DiskSpaceError = "Unzureichender Speicherplatz.`n`nErforderlich: {0} MB`nVerfügbar: {1} MB"
+        DiskSpaceErrorTitle = "Fehler - RealAmadeus Updater"
+        DownloadError = "Fehler beim Herunterladen.`n`nDetails: {0}"
+        ExtractError = "Fehler beim Entpacken.`n`nDetails: {0}"
+        UpdateError = "Fehler beim Aktualisieren.`nEinige Dateien werden möglicherweise verwendet oder der Schreibzugriff wurde verweigert.`n`nDetails: {0}"
+        ErrorTitle = "Fehler - RealAmadeus Updater"
+    }
+    7 = @{ # ru (Russian)
+        Title = "Обновление RealAmadeus"
+        Preparing = "Подготовка..."
+        Downloading = "Загрузка файла..."
+        Extracting = "Распаковка файлов..."
+        Updating = "Обновление приложения..."
+        Cleaning = "Очистка временных файлов..."
+        Completed = "RealAmadeus успешно обновлён.`nНажмите OK, чтобы перезапустить приложение."
+        CompletedTitle = "Обновление завершено - RealAmadeus Updater"
+        DiskSpaceError = "Недостаточно места на диске.`n`nТребуется: {0} MB`nДоступно: {1} MB"
+        DiskSpaceErrorTitle = "Ошибка - RealAmadeus Updater"
+        DownloadError = "Ошибка при загрузке.`n`nПодробности: {0}"
+        ExtractError = "Ошибка при распаковке.`n`nПодробности: {0}"
+        UpdateError = "Ошибка при обновлении.`nНекоторые файлы могут использоваться или доступ на запись запрещён.`n`nПодробности: {0}"
+        ErrorTitle = "Ошибка - RealAmadeus Updater"
+    }
+    8 = @{ # uk (Ukrainian)
+        Title = "Оновлення RealAmadeus"
+        Preparing = "Підготовка..."
+        Downloading = "Завантаження файлу..."
+        Extracting = "Розпакування файлів..."
+        Updating = "Оновлення додатка..."
+        Cleaning = "Очищення тимчасових файлів..."
+        Completed = "RealAmadeus успішно оновлено.`nНатисніть OK, щоб перезапустити додаток."
+        CompletedTitle = "Оновлення завершено - RealAmadeus Updater"
+        DiskSpaceError = "Недостатньо місця на диску.`n`nПотрібно: {0} MB`nДоступно: {1} MB"
+        DiskSpaceErrorTitle = "Помилка - RealAmadeus Updater"
+        DownloadError = "Помилка під час завантаження.`n`nДеталі: {0}"
+        ExtractError = "Помилка під час розпакування.`n`nДеталі: {0}"
+        UpdateError = "Помилка під час оновлення.`nДеякі файли можуть використовуватися або доступ на запис заборонено.`n`nДеталі: {0}"
+        ErrorTitle = "Помилка - RealAmadeus Updater"
+    }
+    9 = @{ # pt (Portuguese)
+        Title = "Atualizador RealAmadeus"
+        Preparing = "Preparando..."
+        Downloading = "Baixando arquivo..."
+        Extracting = "Extraindo arquivos..."
+        Updating = "Atualizando aplicativo..."
+        Cleaning = "Limpando arquivos temporários..."
+        Completed = "O RealAmadeus foi atualizado com sucesso.`nClique em OK para reiniciar o aplicativo."
+        CompletedTitle = "Atualização Concluída - RealAmadeus Updater"
+        DiskSpaceError = "Espaço em disco insuficiente.`n`nNecessário: {0} MB`nDisponível: {1} MB"
+        DiskSpaceErrorTitle = "Erro - RealAmadeus Updater"
+        DownloadError = "Ocorreu um erro durante o download.`n`nDetalhes: {0}"
+        ExtractError = "Ocorreu um erro durante a extração.`n`nDetalhes: {0}"
+        UpdateError = "Ocorreu um erro durante a atualização.`nAlguns arquivos podem estar em uso ou o acesso de gravação foi negado.`n`nDetalhes: {0}"
+        ErrorTitle = "Erro - RealAmadeus Updater"
+    }
+    10 = @{ # tr (Turkish)
+        Title = "RealAmadeus Güncelleyici"
+        Preparing = "Hazırlanıyor..."
+        Downloading = "Dosya indiriliyor..."
+        Extracting = "Dosyalar ayıklanıyor..."
+        Updating = "Uygulama güncelleniyor..."
+        Cleaning = "Geçici dosyalar temizleniyor..."
+        Completed = "RealAmadeus başarıyla güncellendi.`nUygulamayı yeniden başlatmak için Tamam'a tıklayın."
+        CompletedTitle = "Güncelleme Tamamlandı - RealAmadeus Updater"
+        DiskSpaceError = "Yetersiz disk alanı.`n`nGerekli: {0} MB`nMevcut: {1} MB"
+        DiskSpaceErrorTitle = "Hata - RealAmadeus Updater"
+        DownloadError = "İndirme sırasında bir hata oluştu.`n`nDetaylar: {0}"
+        ExtractError = "Ayıklama sırasında bir hata oluştu.`n`nDetaylar: {0}"
+        UpdateError = "Güncelleme sırasında bir hata oluştu.`nBazı dosyalar kullanımda olabilir veya yazma erişimi reddedildi.`n`nDetaylar: {0}"
+        ErrorTitle = "Hata - RealAmadeus Updater"
+    }
+}
+
+$Texts = $Translations[$LangIndex]
+if ($null -eq $Texts) {
+    $Texts = $Translations[1] # Fallback to English
+}
+
+# 1. Wait for parent process to exit
+if ($ParentPid -gt 0) {
+    Write-Host "Waiting for parent process ($ParentPid) to exit..."
+    while (Get-Process -Id $ParentPid -ErrorAction SilentlyContinue) {
+        Start-Sleep -Seconds 1
+    }
+}
+
+# 2. Check disk space
+$DriveLetter = [System.IO.Path]::GetPathRoot($AppDir)
+$Drive = Get-PSDrive -Name $DriveLetter[0] -ErrorAction SilentlyContinue
+if ($null -eq $Drive) {
+    $Drive = Get-PSDrive -Name "C"
+}
+
+$RequiredSpace = $AssetSize * 4 + 50MB
+$FreeSpace = $Drive.Free
+
+if ($FreeSpace -lt $RequiredSpace) {
+    $ErrorMsg = $Texts.DiskSpaceError -f [Math]::Round($RequiredSpace / 1MB, 2), [Math]::Round($FreeSpace / 1MB, 2)
+    [System.Windows.Forms.MessageBox]::Show(
+        $ErrorMsg,
+        $Texts.DiskSpaceErrorTitle,
+        [System.Windows.Forms.MessageBoxButtons]::OK,
+        [System.Windows.Forms.MessageBoxIcon]::Error
+    )
+    exit 1
+}
+
+# Configure TLS
+[Net.ServicePointManager]::SecurityProtocol = [Net.SecurityProtocolType]::Tls12 -bor [Net.SecurityProtocolType]::Tls13
+
+$TempZip = Join-Path $env:TEMP "RealAmadeusUpdate.zip"
+$TempExtractDir = Join-Path $env:TEMP "RealAmadeusExtract"
+
+# Create UI components
+$Form = New-Object System.Windows.Forms.Form
+$Form.Text = $Texts.Title
+$Form.Size = New-Object System.Drawing.Size(400, 160)
+$Form.StartPosition = "CenterScreen"
+$Form.FormBorderStyle = "FixedDialog"
+$Form.MaximizeBox = $false
+$Form.MinimizeBox = $false
+
+$Label = New-Object System.Windows.Forms.Label
+$Label.Location = New-Object System.Drawing.Point(20, 20)
+$Label.Size = New-Object System.Drawing.Size(340, 25)
+$Label.Text = $Texts.Preparing
+$Label.Font = New-Object System.Drawing.Font("MS Gothic", 10)
+
+$ProgressBar = New-Object System.Windows.Forms.ProgressBar
+$ProgressBar.Location = New-Object System.Drawing.Point(20, 55)
+$ProgressBar.Size = New-Object System.Drawing.Size(340, 25)
+$ProgressBar.Style = "Continuous"
+$ProgressBar.Minimum = 0
+$ProgressBar.Maximum = 100
+$ProgressBar.Value = 0
+
+$Form.Controls.Add($Label)
+$Form.Controls.Add($ProgressBar)
+
+# Create WebClient and register events
+$WebClient = New-Object System.Net.WebClient
+$WebClient.Headers.Add("User-Agent", "RealAmadeusPC-Updater")
+
+$global:DownloadCompleted = $false
+$global:DownloadFailed = $false
+$global:ErrorMsg = ""
+
+$OnComplete = {
+    if ($event.SourceEventArgs.Error -ne $null) {
+        $global:DownloadFailed = $true
+        $global:ErrorMsg = $event.SourceEventArgs.Error.Message
+    }
+    $global:DownloadCompleted = $true
+}
+
+Register-ObjectEvent -InputObject $WebClient -EventName DownloadFileCompleted -Action $OnComplete | Out-Null
+
+# Trigger download on shown
+$Form.Add_Shown({
+    $WebClient.DownloadFileAsync((New-Object System.Uri($DownloadUrl)), $TempZip)
+})
+
+$Form.Show()
+
+# Event loop for GUI during download
+$LastProgress = -1
+while (-not $global:DownloadCompleted) {
+    $CurrentSize = 0
+    if (Test-Path $TempZip) {
+        $CurrentSize = (Get-Item $TempZip).Length
+    }
+    $Progress = 0
+    if ($AssetSize -gt 0) {
+        $Progress = [int]($CurrentSize / $AssetSize * 100)
+    }
+    if ($Progress -gt 100) { $Progress = 100 }
+
+    if ($Progress -ne $LastProgress) {
+        $LastProgress = $Progress
+        $Label.Text = "$($Texts.Downloading) $Progress%"
+        $ProgressBar.Value = $Progress
+    }
+    [System.Windows.Forms.Application]::DoEvents()
+    Start-Sleep -Milliseconds 100
+}
+
+# Cleanup WebClient
+Get-EventSubscriber | Unregister-Event
+$WebClient.Dispose()
+
+if ($global:DownloadFailed) {
+    $ErrorMsg = $Texts.DownloadError -f $global:ErrorMsg
+    [System.Windows.Forms.MessageBox]::Show(
+        $ErrorMsg,
+        $Texts.ErrorTitle,
+        [System.Windows.Forms.MessageBoxButtons]::OK,
+        [System.Windows.Forms.MessageBoxIcon]::Error
+    )
+    $Form.Close()
+    exit 1
+}
+
+# 4. Extract update
+$Label.Text = $Texts.Extracting
+$ProgressBar.Style = "Marquee"
+[System.Windows.Forms.Application]::DoEvents()
+
+if (Test-Path $TempExtractDir) {
+    Remove-Item -Path $TempExtractDir -Recurse -Force -ErrorAction SilentlyContinue
+}
+New-Item -ItemType Directory -Path $TempExtractDir -Force | Out-Null
+
+try {
+    Add-Type -AssemblyName System.IO.Compression.FileSystem
+    [System.IO.Compression.ZipFile]::ExtractToDirectory($TempZip, $TempExtractDir)
+} catch {
+    $ErrorMsg = $Texts.ExtractError -f $_
+    [System.Windows.Forms.MessageBox]::Show(
+        $ErrorMsg,
+        $Texts.ErrorTitle,
+        [System.Windows.Forms.MessageBoxButtons]::OK,
+        [System.Windows.Forms.MessageBoxIcon]::Error
+    )
+    Remove-Item -Path $TempZip -Force -ErrorAction SilentlyContinue
+    $Form.Close()
+    exit 1
+}
+
+# 5. Copy and overwrite files
+$Label.Text = $Texts.Updating
+[System.Windows.Forms.Application]::DoEvents()
+
+$SourcePath = $TempExtractDir
+$SubDirs = Get-ChildItem -Path $TempExtractDir
+if ($SubDirs.Count -eq 1 -and $SubDirs[0].Attributes -match "Directory") {
+    $SourcePath = $SubDirs[0].FullName
+}
+
+try {
+    Copy-Item -Path "$SourcePath\*" -Destination $AppDir -Recurse -Force
+} catch {
+    $ErrorMsg = $Texts.UpdateError -f $_
+    [System.Windows.Forms.MessageBox]::Show(
+        $ErrorMsg,
+        $Texts.ErrorTitle,
+        [System.Windows.Forms.MessageBoxButtons]::OK,
+        [System.Windows.Forms.MessageBoxIcon]::Error
+    )
+    Remove-Item -Path $TempZip -Force -ErrorAction SilentlyContinue
+    Remove-Item -Path $TempExtractDir -Recurse -Force -ErrorAction SilentlyContinue
+    $Form.Close()
+    exit 1
+}
+
+# Cleanup
+$Label.Text = $Texts.Cleaning
+[System.Windows.Forms.Application]::DoEvents()
+Remove-Item -Path $TempZip -Force -ErrorAction SilentlyContinue
+Remove-Item -Path $TempExtractDir -Recurse -Force -ErrorAction SilentlyContinue
+
+$Form.Close()
+
+# 6. Completion Message and Restart
+[System.Windows.Forms.MessageBox]::Show(
+    $Texts.Completed,
+    $Texts.CompletedTitle,
+    [System.Windows.Forms.MessageBoxButtons]::OK,
+    [System.Windows.Forms.MessageBoxIcon]::Information
+)
+
+Write-Host "Restarting application..."
+$ExePath = Join-Path $AppDir $ExeName
+if (Test-Path $ExePath) {
+    Start-Process -FilePath $ExePath
+} else {
+    $NewExe = Get-ChildItem -Path $AppDir -Filter "*.exe" | Select-Object -First 1
+    if ($null -ne $NewExe) {
+        Start-Process -FilePath $NewExe.FullName
+    }
+}

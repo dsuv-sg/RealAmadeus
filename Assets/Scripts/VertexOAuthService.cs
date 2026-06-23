@@ -195,18 +195,18 @@ public class VertexOAuthService : MonoBehaviour
 #if UNITY_WEBGL && !UNITY_EDITOR
     private void StartWebGLAuthFlow(Action<string> onError)
     {
-        onError?.Invoke("WebGL環境ではVertex AIはサポートされていません。他のAPIプロバイダーを選択してください。");
+        onError?.Invoke(LocalizationManager.GetOrCreate().T("api_error_webgl_vertex"));
     }
 
     private void ParseWebGLRedirectHash()
     {
         // No-op
     }
-    
+
     // WebGL doesn't use refresh tokens with implicit flow
     private IEnumerator RefreshAccessTokenCoroutine(string refreshToken, Action<string> onSuccess, Action<string> onError)
     {
-        onError?.Invoke("WebGL環境ではVertex AIはサポートされていません。");
+        onError?.Invoke(LocalizationManager.GetOrCreate().T("api_error_webgl_vertex"));
         yield break;
     }
 #endif
