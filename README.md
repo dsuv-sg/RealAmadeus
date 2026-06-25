@@ -38,6 +38,22 @@ Download the [Live2D Unity SDK](https://www.live2d.com/sdk/download/unity/) afte
 
 Open CubismSdkForUnity-X-r.X.X.unitypackage and place it so that it becomes Assets/Live2D.
 
+## Support / サポート
+
+RealAmadeusや、その他DSUV/ELVELTのプロジェクトを支援してくださる方がいらっしゃいましたら、寄付をしていただけると嬉しいです！
+
+100円(0.6ドル程度)からご支援いただけます。
+
+いただいたご支援金は、Elveltのサイト運営/サーバー維持費/プロジェクト開発費 などに使わせていただきます。
+
+If you would like to support RealAmadeus or other DSUV/ELVELT projects, I would greatly appreciate a donation!
+
+You can contribute starting from as little as 100 yen (approximately $0.60).
+
+Your contributions will be used for expenses such as operating the Elvelt website, server maintenance, and project development costs.
+
+[![ko-fi](https://ko-fi.com/img/githubbutton_sm.svg)](https://ko-fi.com/K6Y021XDS8)
+
 ## License / ライセンス
 
 本プロジェクトは **CC BY-NC 4.0 (クリエイティブ・コモンズ 表示 - 非営利 4.0 国際)** の下でライセンスされています。以下の条件に従ってご利用ください：
