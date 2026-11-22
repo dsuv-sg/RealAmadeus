@@ -1,0 +1,24 @@
+[package]
+name = "amadeus-core"
+description = "Platform-agnostic core logic of RealAmadeus V2 (wasm32 + native)."
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+authors.workspace = true
+repository.workspace = true
+
+[dependencies]
+serde.workspace = true
+# `float_roundtrip`: correctly rounded float parsing, like JS `JSON.parse`. The default parser
+# can be 1 ULP off (`100499.99999999999` -> `100500`), which changes `String(tag)` of numeric
+# SAVE_EVENT tags and imported `turnCount`s. Declared here so the wasm UI build gets it too.
+serde_json = { workspace = true, features = ["float_roundtrip"] }
+thiserror.workspace = true
+# ECMAScript `Number#toString` / `Number#toFixed` formatting (no_std, no dependencies). Settings
+# floats must be written byte-identically to V1 (`String(0.8)` == "0.8", `String(1e21)` == "1e+21").
+ryu-js = "1.0.3"
+
+[dev-dependencies]
+# Golden SHA-256 hashes of the verbatim V1 prompts / boot log (computed from V1 with Node 22).
+sha2 = "0.10.9"

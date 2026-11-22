@@ -1,0 +1,572 @@
+{
+  "common": {
+    "returnMain": "メインに戻る",
+    "systemOnline": "SYSTEM ONLINE",
+    "terminateSession": "セッション終了"
+  },
+  "home": {
+    "role": "Lead Architect at ELVELT",
+    "tagline": "未知を実装する。",
+    "activeProjects": "進行中のプロジェクト",
+    "projects": {
+      "amadeus": {
+        "title": "RealAmadeus",
+        "desc": "Steins;Gate AIシステム再現。対話ロジックの実装。"
+      },
+      "elvelt": {
+        "title": "ELVELT",
+        "desc": "次世代コンパイラ基盤およびツールチェーンの開発。"
+      }
+    },
+    "socials": {
+      "twitter": {
+        "label": "X",
+        "sub": "投稿"
+      },
+      "github": {
+        "label": "GitHub",
+        "sub": "ソースコード"
+      },
+      "youtube": {
+        "label": "YouTube",
+        "sub": "動画コンテンツ"
+      },
+      "support": {
+        "label": "Support",
+        "sub": "支援する (Ko-fi)"
+      }
+    }
+  },
+  "amadeus": {
+    "status": {
+      "system": "SYSTEM",
+      "ver": "VER 1.04a",
+      "connecting": "CONNECTING TO KURISU..."
+    },
+    "button": {
+      "init": "システム初期化"
+    },
+    "panels": {
+      "goal": {
+        "title": "PROJECT GOAL",
+        "content": "Steins;Gate 0で描かれたAmadeus AIシステムの完全再現。"
+      },
+      "status": {
+        "title": "CURRENT STATUS",
+        "content": "メモリグラフ実装フェーズ。文脈維持効率: 87%。"
+      },
+      "access": {
+        "title": "ACCESS LEVEL",
+        "content": "制限あり。ニューラルネットワーク調整には開発者キーが必要です。"
+      }
+    },
+    "hud": {
+      "logic": "LOGIC ENGINE",
+      "voice": "VOICE SYNTHESIS",
+      "memory": "MEMORY CORE"
+    },
+    "accessRestricted": {
+      "title": "アクセス制限",
+      "desc": "Amadeusシステムへのパブリックアクセスは現在、許可された研究者に限定されています。",
+      "button": "接続を開始..."
+    },
+    "login": {
+      "userId": "USER ID",
+      "password": "PASSWORD",
+      "connect": "接続",
+      "placeholderId": "Salieri",
+      "error": "認証エラー: IDまたはパスワードが無効です。"
+    },
+    "preparation": {
+      "title": "SYSTEM PREPARATION",
+      "message": "準備中",
+      "status": "INITIALIZING..."
+    },
+    "release": {
+      "title": "SYSTEM V2.0 RELEASED",
+      "message": "Real Amadeus V2.0が正式にリリースされました。",
+      "windowsDownload": "Windows",
+      "macosDownload": "MacOS",
+      "linuxDownload": "Linux",
+      "lightweightWindowsDownload": "軽量化版Windows",
+      "download": "ダウンロード",
+      "githubRepo": "GitHubリポジトリ",
+      "docs": "ドキュメント",
+      "webVersion": "Web版"
+    },
+    "docs": {
+      "title": "DOCUMENTATION",
+      "back": "システムへ戻る",
+      "sidebar": {
+        "gettingStarted": "はじめに",
+        "download": "ダウンロード",
+        "login": "ログイン方法",
+        "controls": "操作方法",
+        "apiSetup": "APIの取得と設定",
+        "apiOpenAI": "OpenAI API",
+        "apiGemini": "Google Gemini API",
+        "apiClaude": "Anthropic Claude API",
+        "apiGroq": "Groq API",
+        "apiVertex": "Google Vertex AI"
+      },
+      "gettingStarted": {
+        "title": "はじめに",
+        "desc": "RealAmadeusは、Steins;Gate 0に登場する人工知能「Amadeus」のシステムを再現することを目的としたプロジェクトです。このドキュメントでは、本システムを操作し、フル機能を利用するための手順を解説します。",
+        "loginInfo": "本システムは研究目的で開発されています。AIとの高度な対話を行うには、初期設定およびAPI構成が必要です。"
+      },
+      "download": {
+        "title": "ダウンロード",
+        "desc": "旧バージョン（レガシー）として、Unity版とQt版の2種類をアーカイブ公開しています。通常は上記の最新 Rust 版（V2）をご利用ください。",
+        "standardTitle": "レガシー版（Unity） RealAmadeusUnity",
+        "standardDesc": "Unityエンジンで開発された旧バージョン（レガシー）です。Windows/Mac/Linuxで使用できます。",
+        "lightweightTitle": "レガシー版（Qt・軽量化版） RealAmadeusQT",
+        "lightweightDesc": "Qt/QMLで開発された旧バージョン（レガシー）です。軽快な動作が特長です。",
+        "recommendedEnv": "推奨環境",
+        "standardEnv": "GPU搭載環境 / RAM1GB以上の環境",
+        "lightweightEnv": "GPU非搭載 / 低スペック環境",
+        "windows": "Windows",
+        "mac": "MacOS",
+        "linux": "Linux",
+        "downloadBtn": "ダウンロード",
+        "releasesPage": "Releasesページ",
+        "fallbackStandard": {
+          "$rich": [
+            {
+              "type": "text",
+              "text": "上記のボタンからダウンロードできない場合は、"
+            },
+            {
+              "type": "link",
+              "href": "https://github.com/dsuv-sg/RealAmadeusUnity/releases",
+              "text": "RealAmadeusUnity Releases"
+            },
+            {
+              "type": "text",
+              "text": "（Unity版・レガシー）から直接ダウンロードしてください。"
+            }
+          ]
+        },
+        "fallbackLightweight": {
+          "$rich": [
+            {
+              "type": "text",
+              "text": "上記のボタンからダウンロードできない場合は、"
+            },
+            {
+              "type": "link",
+              "href": "https://github.com/dsuv-sg/RealAmadeusQT/releases",
+              "text": "RealAmadeusQT Releases"
+            },
+            {
+              "type": "text",
+              "text": "（Qt版・レガシー）から直接ダウンロードしてください。"
+            }
+          ]
+        },
+        "steps": [
+          {
+            "title": "OSに応じたアセットをダウンロード",
+            "content": "Assetsセクションから、ご利用のOSに対応したファイルをダウンロードします。Windows/MacOS/Linuxの各ビルドが提供されています（軽量化版はWindowsのみ）。"
+          },
+          {
+            "title": "ファイルを解凍",
+            "content": "ダウンロードした圧縮ファイルを任意のフォルダに解凍してください。"
+          }
+        ],
+        "fileStructure": {
+          "title": "ファイル構成について",
+          "windows": "解凍後、Buildフォルダ内に RealAmadeus.exe（実行ファイル）、RealAmadeus_Data/（アセット・データ）、UnityPlayer.dll、MonoBleedingEdge/、D3D12/ などの実行環境ファイルが含まれます。フォルダ構成を維持したまま RealAmadeus.exe を実行してください。",
+          "mac": "解凍後、Buildフォルダ内に Mac.app バンドルが含まれます。Mac.app をアプリケーションフォルダなどに移動して利用してください。バンドル内には実行ファイル（MacOS/RealAmadeus）、Frameworks/、PlugIns/、Resources/、MonoBleedingEdge/ が含まれます。",
+          "linux": "解凍後、Buildフォルダ内に RealAmadeus.x86_64（実行ファイル）、RealAmadeus_Data/（データ）、UnityPlayer.so、libdecor-0.so.0、libdecor-cairo.so などが含まれます。実行権限を付与してから起動してください。",
+          "windowsQT": "解凍後、Buildフォルダ内に appRealAmadeusPC.exe（実行ファイル）、RealAmadeusPC/（QMLリソース）、Qt6*.dll（多数）、platforms/、qml/、imageformats/、Live2DCubismCore.dll、FrameworkShaders/、translations/ などが含まれます。フォルダ構成を維持したまま appRealAmadeusPC.exe を実行してください。"
+        },
+        "notice": "※ Windows以外のOSでは動作未確認の場合があります。問題が発生した場合は、GitHub Issuesにて報告をお願いします。"
+      },
+      "changelog": {
+        "title": "変更履歴",
+        "desc": "RealAmadeusの主なアップデート内容です。",
+        "versions": [
+          {
+            "version": "V1.4",
+            "product": "RealAmadeus",
+            "items": [
+              "起動メッセージを実装",
+              "ミニゲーム（クイズ）を実装",
+              "アチーブメント機能を追加",
+              "会話言語を表示言語とは別に設定できるようになった",
+              "会話記録のエクスポート/インポート機能を追加",
+              "MS明朝の動的ロード・自動ダウンロードなど、フォントレンダリングを改善",
+              "ドラッグによるウィンドウサイズ変更を無効化",
+              "ヘブライ語/アラビア語のサポートを追加",
+              "ローカライズに使用されるフォントをNotoSerifに変更"
+            ]
+          },
+          {
+            "version": "V1.3",
+            "product": "RealAmadeus",
+            "items": [
+              "Live2Dの居眠りモーションを実装",
+              "OpenAI互換APIの使用とベースURL指定機能を実装",
+              "UIを調整",
+              "応答ロード中のキャンセル機能を実装",
+              "Live2Dのリップシンクを実装",
+              "アスペクト比を維持したスケーリングを行うように修正",
+              "APIストリーミング通信時のデッドロックを修正",
+              "APIキーを暗号化保存するようにし、セキュリティを向上",
+              "RAGデータの永続化やベクトルDB接続の最適化を実装",
+              "ポルトガル語/ウクライナ語/トルコ語のサポートを追加",
+              "起動時の画面点滅および一部環境での起動失敗を防ぐため、デフォルトの画面モードをウィンドウモードに変更",
+              "起動時の最新リリース自動チェックおよび自動アップデーターを実装",
+              "日本語以外の言語でも会話テキストが文末（ピリオド等）で適切に区切られるように改善",
+              "ローカライズの管理を最適化"
+            ]
+          },
+          {
+            "version": "V1.2",
+            "product": "RealAmadeusQT",
+            "items": [
+              "中国語/韓国語/スペイン語/フランス語/ドイツ語/ロシア語 のサポートを追加",
+              "視線トラッキングを追加",
+              "デスクトップ通知機能を実装",
+              "軽量化モードを追加",
+              "Alt+Enter、F11 での画面モード切替を実装",
+              "APIプロバイダーにOllamaとOpenRouterを追加",
+              "UIのバグを修正",
+              "APIキーのセキュリティを向上",
+              "パフォーマンスを改善"
+            ]
+          },
+          {
+            "version": "V1.1",
+            "product": "RealAmadeus",
+            "items": [
+              "メニュー画面のクリック選択を実装",
+              "日本語/英語の言語切り替えを実装",
+              "各種画面に[閉じる/キャンセル/適用]ボタンを実装",
+              "チェンジログ/バックログ用にスクロールバーを実装",
+              "視認性の向上のため、UIの一部を変更",
+              "軽量化版のリリースを開始"
+            ]
+          },
+          {
+            "version": "V1.0.1",
+            "product": "RealAmadeus",
+            "items": [
+              "GPU使用率が異常に高くなってしまう問題を修正",
+              "フルスクリーン状態での最小化時にウィンドウが異常に小さくなってしまう問題を修正",
+              "ログアウト後の再ログインが不可能になってしまう問題を修正",
+              "一部AIサービスの利用時に感情タグが表示されてしまう問題を修正"
+            ]
+          },
+          {
+            "version": "V1.0",
+            "product": "RealAmadeus",
+            "items": [
+              "リアルアマデウスの最初のバージョンをリリース",
+              "基本的な会話機能を実装"
+            ]
+          }
+        ]
+      },
+      "loginDoc": {
+        "title": "システムログイン",
+        "desc": "システムにアクセスするための認証情報です。起動画面で以下の資格情報を入力してください。",
+        "idLabel": "User ID",
+        "idValue": "Salieri",
+        "passLabel": "Password",
+        "passValue": "MakiseKurisu"
+      },
+      "controls": {
+        "title": "キーボード操作",
+        "desc": "Amadeusシステム内の各種操作はキーボードおよびマウスで行います。",
+        "items": [
+          {
+            "key": "Enter",
+            "desc": "決定 / ログインの実行"
+          },
+          {
+            "key": "Tab / 右クリック",
+            "desc": "システムメニューの開閉"
+          },
+          {
+            "key": "W A S D / 矢印",
+            "desc": "メニューや設定項目の移動"
+          },
+          {
+            "key": "Backspace",
+            "desc": "バックログを閉じる / 設定の保存と終了"
+          },
+          {
+            "key": "Alt + Enter / F11",
+            "desc": "フルスクリーン / ウィンドウモード切替"
+          }
+        ]
+      },
+      "api": {
+        "title": "API設定",
+        "desc": "AIと対話を行うには、外部のLLMプロバイダのAPIキーが必要です。",
+        "steps": [
+          "システム起動後、「Tab」キーまたは「右クリック」でメニューを開きます。",
+          "メニューから「CONFIG」を選択し、「API設定」タブへ進みます。",
+          "「APIプロバイダ」のドロップダウンから使用するAIモデルを選択します。",
+          "提供されている「APIキー」と「モデル名」を入力し、設定を保存（Backspace）してください。"
+        ],
+        "notice": "※設定したAPIキーはローカルに保存され、通信は直接プロバイダのサーバーへ行われます。開発元（DSUV）に情報が送信されることはありません。",
+        "modelLabels": {
+          "title": "利用可能なモデル",
+          "available": "利用可能",
+          "recommended": "推奨"
+        }
+      },
+      "apiOpenAI": {
+        "title": "OpenAI API",
+        "desc": "ChatGPTなどの高精度モデルが利用可能です。設定が簡単で安定しています。",
+        "modelList": {
+          "available": [
+            "gpt-6.2-astra",
+            "gpt-6.2-sol",
+            "gpt-6.1-terra",
+            "gpt-6-luna",
+            "gpt-5.6-sol",
+            "gpt-5.6-terra",
+            "gpt-5.6-luna"
+          ],
+          "recommended": "gpt-6.2-sol"
+        },
+        "steps": [
+          {
+            "title": "アカウント作成",
+            "content": {
+              "$rich": [
+                {
+                  "type": "link",
+                  "href": "https://platform.openai.com/",
+                  "text": "OpenAI Platform (platform.openai.com)"
+                },
+                {
+                  "type": "text",
+                  "text": " にアクセスし、アカウントを登録します。"
+                }
+              ]
+            }
+          },
+          {
+            "title": "課金設定",
+            "content": "APIを利用するにはクレジットカードの登録（Pay as you go）が必要です。Billingセクションから設定してください。"
+          },
+          {
+            "title": "キーの生成",
+            "content": "API Keysページから「Create new secret key」をクリックしてキー（sk-...）を生成します。"
+          },
+          {
+            "title": "Amadeus側の設定",
+            "content": "システムメニューの CONFIG > API設定 を開き、「OpenAI」を選択し、取得したAPIキーと利用したいモデル名（例: gpt-6.2-sol）を入力して保存します。"
+          }
+        ]
+      },
+      "apiGemini": {
+        "title": "Google Gemini API",
+        "desc": "高速かつ大コンテキストに対応。Googleアカウントで簡単に取得でき、無料枠も存在します。",
+        "modelList": {
+          "available": [
+            "gemini-4-carbon",
+            "gemini-4-argon",
+            "gemini-4-neon",
+            "gemini-4-hydrogen",
+            "gemini-3.8-flash",
+            "gemini-3.6-flash",
+            "gemini-3.5-flash-lite"
+          ],
+          "recommended": "gemini-3.8-flash"
+        },
+        "steps": [
+          {
+            "title": "Google AI Studio",
+            "content": {
+              "$rich": [
+                {
+                  "type": "link",
+                  "href": "https://aistudio.google.com/",
+                  "text": "Google AI Studio (aistudio.google.com)"
+                },
+                {
+                  "type": "text",
+                  "text": " にアクセスし、Googleアカウントでログインします。"
+                }
+              ]
+            }
+          },
+          {
+            "title": "プロジェクト作成とキー生成",
+            "content": "「Get API key」メニューを選択し、新しいプロジェクトに対してキーを生成します。"
+          },
+          {
+            "title": "Amadeus側の設定",
+            "content": "システムメニューの CONFIG > API設定 を開き、「Google Gemini」を選択し、取得したAPIキーと利用したいモデル名（例: gemini-3.8-flash）を入力して保存します。"
+          }
+        ]
+      },
+      "apiClaude": {
+        "title": "Anthropic Claude API",
+        "desc": "極めて自然な日本語と高い推論能力を持ちます。複雑な対話に最適です。",
+        "modelList": {
+          "available": [
+            "claude-fable-5-2",
+            "claude-opus-5-5",
+            "claude-sonnet-5-5",
+            "claude-haiku-5-5",
+            "claude-opus-4-6",
+            "claude-sonnet-4-6"
+          ],
+          "recommended": "claude-sonnet-5-5"
+        },
+        "steps": [
+          {
+            "title": "アカウント登録",
+            "content": {
+              "$rich": [
+                {
+                  "type": "link",
+                  "href": "https://console.anthropic.com/",
+                  "text": "Anthropic Console (console.anthropic.com)"
+                },
+                {
+                  "type": "text",
+                  "text": " にアクセスし登録します。"
+                }
+              ]
+            }
+          },
+          {
+            "title": "課金設定",
+            "content": "Settings > Billing からクレジットを追加します。"
+          },
+          {
+            "title": "キーの生成",
+            "content": "API Keys セクションから「Create Key」をクリックしてキー（sk-ant-...）を取得します。"
+          },
+          {
+            "title": "Amadeus側の設定",
+            "content": "システムメニューの CONFIG > API設定 を開き、「Anthropic Claude」を選択し、取得したAPIキーと利用したいモデル名（例: claude-sonnet-5-5）を入力して保存します。"
+          }
+        ]
+      },
+      "apiGroq": {
+        "title": "Groq API",
+        "desc": "驚異的な推論速度を誇るLPU搭載プラットフォーム。レスポンスの速さが特徴です。",
+        "modelList": {
+          "available": [
+            "qwen/qwen3.8-27b",
+            "qwen/qwen3.6-27b",
+            "openai/gpt-oss-120b",
+            "openai/gpt-oss-20b",
+            "groq/compound",
+            "llama-3.3-70b-versatile",
+            "llama-3.1-8b-instant"
+          ],
+          "recommended": "qwen/qwen3.8-27b"
+        },
+        "steps": [
+          {
+            "title": "Groq Console",
+            "content": {
+              "$rich": [
+                {
+                  "type": "link",
+                  "href": "https://console.groq.com/",
+                  "text": "Groq Console (console.groq.com)"
+                },
+                {
+                  "type": "text",
+                  "text": " にアクセスしログインします。"
+                }
+              ]
+            }
+          },
+          {
+            "title": "キーの生成",
+            "content": "API Keys セクションから「Create API Key」を選択し、キーを生成します。"
+          },
+          {
+            "title": "Amadeus側の設定",
+            "content": "システムメニューの CONFIG > API設定 を開き、「Groq」を選択し、取得したAPIキーと利用したいモデル名（例: qwen/qwen3.8-27b）を入力して保存します。"
+          }
+        ]
+      },
+      "apiVertex": {
+        "title": "Google Vertex AI",
+        "desc": "GCP上のエンタープライズ向けAI開発基盤。セキュリティと大規模運用に優れています。RealAmadeusでは、内部でPowerShell経由でGoogle Cloud CLIを呼び出し、認証情報を取得します。",
+        "modelList": {
+          "available": [
+            "gemini-4-carbon",
+            "gemini-4-argon",
+            "gemini-4-neon",
+            "gemini-4-hydrogen",
+            "gemini-3.8-flash",
+            "gemini-3.6-flash",
+            "gemini-3.5-flash-lite"
+          ],
+          "recommended": "gemini-3.8-flash"
+        },
+        "steps": [
+          {
+            "title": "登録",
+            "content": {
+              "$rich": [
+                {
+                  "type": "link",
+                  "href": "https://console.cloud.google.com/",
+                  "text": "Google Cloud (console.cloud.google.com)"
+                },
+                {
+                  "type": "text",
+                  "text": " の登録を行います。"
+                }
+              ]
+            }
+          },
+          {
+            "title": "トライアルの有効化",
+            "content": "トライアルアカウントを有効化します。"
+          },
+          {
+            "title": "プロジェクトの作成",
+            "content": "Google Cloud プロジェクトを作成します。"
+          },
+          {
+            "title": "Vertex AI APIの有効化",
+            "content": "プロジェクトで Vertex AI API を有効化します。"
+          },
+          {
+            "title": "Google Cloud CLIのインストール",
+            "content": {
+              "$rich": [
+                {
+                  "type": "link",
+                  "href": "https://dl.google.com/dl/cloudsdk/channels/rapid/GoogleCloudSDKInstaller.exe?hl=ja",
+                  "text": "Google Cloud CLI (gcloud) Installer"
+                },
+                {
+                  "type": "text",
+                  "text": " をダウンロード、インストールしてセットアップします。その後、コマンドプロンプト(cmd)を開き、"
+                },
+                {
+                  "type": "code",
+                  "text": "gcloud auth login"
+                },
+                {
+                  "type": "text",
+                  "text": "を実行してログインします。"
+                }
+              ]
+            }
+          },
+          {
+            "title": "Amadeus側の設定",
+            "content": "STEP3で作成したプロジェクトのIDを確認します。システムメニューのCONFIGから「Vertex AI」を選択し、利用するプロジェクトIDとモデル名（例: gemini-3.8-flash）を設定します。認証トークンはシステムがgcloud経由で自動取得します。"
+          }
+        ]
+      }
+    }
+  }
+}

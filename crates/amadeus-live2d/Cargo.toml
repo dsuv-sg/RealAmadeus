@@ -1,0 +1,35 @@
+[package]
+name = "amadeus-live2d"
+description = "Rust port of the Live2D Cubism Web Framework subset + WebGL renderer + the ReamaCubism player used by RealAmadeus. Uses the proprietary Live2DCubismCore JS at runtime."
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+authors.workspace = true
+repository.workspace = true
+
+[dependencies]
+# preserve_order: JS object key order (motion groups / layout); float_roundtrip: JSON.parse-exact numbers.
+serde_json = { workspace = true, features = ["preserve_order", "float_roundtrip"] }
+# fdlibm ports: bit-identical to V8's Math.atan2/acos/exp (and sin/cos for ~99% of inputs) on host and wasm.
+libm = "0.2.11"
+thiserror.workspace = true
+log.workspace = true
+wasm-bindgen.workspace = true
+wasm-bindgen-futures.workspace = true
+js-sys.workspace = true
+
+[dependencies.web-sys]
+workspace = true
+features = [
+  "console", "Window", "Document", "Element", "HtmlElement", "HtmlCanvasElement", "HtmlImageElement",
+  "CssStyleDeclaration", "DomRect", "Node", "NodeList",
+  "Performance", "Response", "Request", "RequestInit", "Headers",
+  "ResizeObserver", "ResizeObserverEntry",
+  "MouseEvent", "PointerEvent", "TouchEvent", "Touch", "TouchList", "EventTarget", "AddEventListenerOptions",
+  "WebGlRenderingContext", "WebGl2RenderingContext", "WebGlBuffer", "WebGlFramebuffer", "WebGlProgram",
+  "WebGlRenderbuffer", "WebGlShader", "WebGlTexture", "WebGlUniformLocation", "WebGlContextAttributes",
+  "WebGlVertexArrayObject", "OesVertexArrayObject", "WebglLoseContext", "ExtTextureFilterAnisotropic",
+  "ImageBitmap", "ImageData", "CanvasRenderingContext2d", "OffscreenCanvas",
+  "Event", "HtmlScriptElement", "HtmlHeadElement", "Url",
+]

@@ -1,0 +1,22 @@
+[package]
+name = "xtask"
+description = "Build and release automation for RealAmadeus V2 (`cargo xtask help`)."
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+publish = false
+
+# Kept deliberately small: everything else (archives, git, cargo, trunk, tauri) is driven
+# through std::process::Command so the tool behaves the same on Windows, macOS and Linux.
+[dependencies]
+anyhow.workspace = true
+serde_json.workspace = true
+clap.workspace = true
+# Already in Cargo.lock through other crates, so this adds no new download.
+sha2 = "0.10"
+
+[dev-dependencies]
+# Test-only: the download page (amadeus-ui) links to assets named by amadeus_core::release;
+# `platform::tests::names_match_the_download_page_table` keeps both tables identical.
+amadeus-core = { path = "../crates/amadeus-core" }

@@ -1,0 +1,41 @@
+# Docker build context = workspace root. Keep it small and free of secrets.
+
+# Build outputs
+target/
+**/target/
+apps/web/dist/
+apps/web/dist-*/
+apps/desktop/gen/
+dist/
+release/
+data/
+node_modules/
+
+# VCS, CI and editor files
+.git/
+.github/
+.vscode/
+.idea/
+*.swp
+.DS_Store
+
+# Secrets — never send them to a build (or bake them into a layer)
+**/.env
+**/.env.*
+!**/.env.example
+**/*.pem
+**/*.key
+**/*.pfx
+**/*.p12
+**/realamadeusmain-*.json
+**/*service-account*.json
+
+# Pins channel "stable" only; inside the image the base image's stable toolchain is used
+# (otherwise rustup would download a second copy of the same toolchain).
+rust-toolchain.toml
+
+# Not needed inside the image (tools/live2d-viewer must stay: it is a workspace member)
+Dockerfile
+.dockerignore
+docs/
+tools/l2d-probe/

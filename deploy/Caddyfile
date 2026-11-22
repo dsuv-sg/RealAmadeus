@@ -1,0 +1,42 @@
+# RealAmadeus V2 — Caddy reverse proxy for amadeus-server (127.0.0.1:9502,
+# AMADEUS_BASE_PATH=/amadeus). Caddy obtains TLS certificates automatically.
+#
+# Replace example.com with your domain. If the site already has a Caddyfile, copy the
+# `@amadeus` matcher and its `handle` block into it, BEFORE the catch-all handler that serves
+# the rest of the site (e.g. the Next.js app on :9501).
+#
+# Client IP: amadeus-server rate-limits FreeAPI by the first X-Forwarded-For entry. Caddy
+# replaces that header with the connecting address unless the peer is a configured
+# `trusted_proxies` entry, so behind Cloudflare add its ranges there (global `servers` option).
+
+example.com {
+	# /amadeus (V1's canonical URL, served by amadeus-server itself) and everything below it.
+	# Not `/amadeus*`: that would also catch /amadeus_logo.png of the existing site.
+	# Do not use `handle_path` here: it would strip /amadeus, but amadeus-server expects it.
+	@amadeus path /amadeus /amadeus/*
+	handle @amadeus {
+		reverse_proxy 127.0.0.1:9502 {
+			# Flush immediately so Server-Sent Events (chat streaming) are not buffered.
+			flush_interval -1
+		}
+	}
+
+	# The rest of the site, e.g. the existing Next.js app:
+	# handle {
+	# 	reverse_proxy 127.0.0.1:9501
+	# }
+
+	# Note: if you enable `encode` for the site, exclude the stream endpoint:
+	# @compressible not path /amadeus/app/api/chat/stream*
+	# encode @compressible zstd gzip
+}
+
+# Side-by-side preview under /amadeus-v2/ (build with `cargo xtask dist web --base /amadeus-v2/`,
+# run a second server with AMADEUS_BASE_PATH=/amadeus-v2 AMADEUS_BIND=127.0.0.1:9503):
+#
+# 	@amadeus_v2 path /amadeus-v2 /amadeus-v2/*
+# 	handle @amadeus_v2 {
+# 		reverse_proxy 127.0.0.1:9503 {
+# 			flush_interval -1
+# 		}
+# 	}

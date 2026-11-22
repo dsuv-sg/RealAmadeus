@@ -1,0 +1,15 @@
+{
+  "name": "Amadeus",
+  "short_name": "Amadeus",
+  "description": "Real Amadeus Web",
+  "start_url": "app",
+  "scope": "./",
+  "display": "standalone",
+  "orientation": "landscape",
+  "background_color": "#000000",
+  "theme_color": "#000000",
+  "lang": "ja",
+  "icons": [
+    { "src": "static/amadeus_logo.png", "sizes": "1024x1024", "type": "image/png", "purpose": "any" }
+  ]
+}

@@ -1,0 +1,123 @@
+/*
+ * RealAmadeus V2 - Tailwind v4 entry (1st stylesheet; compiled by Trunk rel="tailwind-css" with the
+ * standalone CLI pinned in Trunk.toml, tailwindcss 4.1.18 = the V1 version).
+ *
+ * Port of V1 app/globals.css (root layout stylesheet, 69 lines): lines 2-69 are VERBATIM (@theme
+ * tokens + keyframes, unlayered :root/body/.glitch-text rules). Only line 1 changed: automatic source
+ * detection is disabled and the scanned sources are listed explicitly (V1 scanned the whole repo).
+ * Paths are relative to this file. Tailwind only emits classes that appear literally in these files,
+ * so write Tailwind classes as complete string literals (never build them with format!).
+ *
+ * Output order (same as V1): @layer theme/base(preflight)/components/utilities, then the unlayered
+ * rules below. The app stylesheet (style/amadeus.css, unlayered) must load AFTER this one.
+ * Release builds must run Trunk with minify enabled (Trunk.toml minify = "on_release" or --minify):
+ * only then does the CLI get --minify and lower the output (flattened nesting, colour fallbacks,
+ * prefixes) like V1's shipped CSS; without it variants stay as native CSS nesting. The result has
+ * V1's declarations; V1's extra Next/Lightning CSS pass only merged some adjacent equal rules
+ * (e.g. the two ".selection:text-white" selectors), which does not change the cascade.
+ */
+@import "tailwindcss" source(none);
+
+@source "../src/**/*.rs";
+@source "../../../crates/amadeus-ui/src/**/*.rs";
+@source "../../../crates/amadeus-core/src/**/*.rs";
+@source "../index.html";
+
+/* V1 DOM classes outside the views: root-layout <body> and the /app layout wrapper
+   (<div class="amadeus-root h-screen w-screen overflow-hidden">). Always generated. */
+@source inline("bg-black text-white min-h-screen selection:bg-purple-500/30 selection:text-white h-screen w-screen overflow-hidden");
+
+@theme {
+  --color-amadeus: #d49e38;
+  --font-amadeus: "Courier New", Courier, monospace;
+  
+  --animate-glitch-1: glitch-1 2.5s infinite linear alternate-reverse;
+  --animate-glitch-2: glitch-2 3s infinite linear alternate-reverse;
+  --animate-scanline: scanline 8s linear infinite;
+  
+  @keyframes glitch-1 {
+    0% { clip-path: inset(20% 0 80% 0); }
+    20% { clip-path: inset(60% 0 1% 0); }
+    40% { clip-path: inset(40% 0 50% 0); }
+    60% { clip-path: inset(80% 0 5% 0); }
+    80% { clip-path: inset(10% 0 70% 0); }
+    100% { clip-path: inset(30% 0 20% 0); }
+  }
+  @keyframes glitch-2 {
+    0% { clip-path: inset(10% 0 60% 0); }
+    20% { clip-path: inset(30% 0 20% 0); }
+    40% { clip-path: inset(70% 0 20% 0); }
+    60% { clip-path: inset(20% 0 60% 0); }
+    80% { clip-path: inset(50% 0 30% 0); }
+    100% { clip-path: inset(10% 0 80% 0); }
+  }
+  @keyframes scanline {
+    0% { transform: translateY(-100%); }
+    100% { transform: translateY(100%); }
+  }
+}
+
+:root {
+  --background: #000000;
+  --foreground: #ededed;
+}
+
+body {
+  background: var(--background);
+  color: var(--foreground);
+  font-family: Arial, Helvetica, sans-serif;
+  overflow-x: hidden;
+}
+
+.glitch-text {
+  position: relative;
+}
+.glitch-text::before,
+.glitch-text::after {
+  content: attr(data-text);
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+  background: black;
+}
+.glitch-text::before {
+  left: 2px;
+  text-shadow: -1px 0 #ff0000;
+  clip-path: inset(0 0 0 0);
+  animation: glitch-1 2s infinite linear alternate-reverse;
+}
+.glitch-text::after {
+  left: -2px;
+  text-shadow: -1px 0 #0000ff;
+  clip-path: inset(0 0 0 0);
+  animation: glitch-2 2s infinite linear alternate-reverse;
+}
+
+/*
+ * V1 styled-jsx blocks of app/amadeus/page.tsx (landing), changelog/page.tsx and download/page.tsx.
+ * Unlayered like in V1 and with the same specificity as V1's ".x.jsx-<hash>" selectors: (0,2,0) for
+ * .animate-scroll-bg and .text-shadow-glow, (0,3,0) for .glow-on-hover:hover. The changelog and
+ * download values are the defaults; the landing page's root <main> carries class "page-landing".
+ * The landing ".glow-on-hover:hover" rule is intentionally absent: in V1 it never matched, because
+ * styled-jsx did not add its scope class to the <Link> that carries "glow-on-hover".
+ * styled-jsx did not rename @keyframes either: "scroll-bg" was a global name in V1 too.
+ */
+@keyframes scroll-bg {
+    0% { transform: translateY(0); }
+    100% { transform: translateY(-50%); }
+}
+.animate-scroll-bg:not(.page-landing *),
+.page-landing .animate-scroll-bg {
+    animation: scroll-bg 60s linear infinite;
+}
+.text-shadow-glow:not(.page-landing *) {
+    text-shadow: 0 0 15px rgba(212, 158, 56, 0.6);
+}
+.page-landing .text-shadow-glow {
+    text-shadow: 0 0 10px rgba(212, 158, 56, 0.5);
+}
+.glow-on-hover:hover:not(.page-landing *) {
+    box-shadow: 0 0 30px rgba(212, 158, 56, 0.3);
+}

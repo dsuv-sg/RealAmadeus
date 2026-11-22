@@ -1,0 +1,79 @@
+<!doctype html>
+<html lang="en" class="dark">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+    <meta name="theme-color" content="#000000" />
+    <meta name="description" content="Real Amadeus Web" />
+    <meta name="application-name" content="Amadeus" />
+    <meta name="mobile-web-app-capable" content="yes" />
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
+    <meta name="apple-mobile-web-app-title" content="Amadeus" />
+    <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate" />
+    <meta http-equiv="Pragma" content="no-cache" />
+    <meta http-equiv="Expires" content="0" />
+    <!-- Trunk turns the next tag into the base element (href = public_url); every runtime URL is base-relative. -->
+    <base data-trunk-public-url />
+    <title>Amadeus</title>
+    <link rel="icon" href="static/amadeus_logo.png" />
+    <link rel="shortcut icon" href="static/amadeus_logo.png" />
+    <link rel="apple-touch-icon" href="static/amadeus_logo.png" />
+    <link rel="manifest" href="manifest.webmanifest" />
+
+    <!-- V1 cascade order: (1) Tailwind bundle (V1 app/globals.css), (2) Google Fonts sheet for Noto Serif JP,
+         (3) app CSS (V1 app/amadeus/app/globals.css, unlayered). Never swap or merge.
+         amadeus.css is data-no-minify: Trunk's target-less Lightning CSS pass would strip the -webkit-backdrop-filter V1 shipped. -->
+    <link data-trunk rel="tailwind-css" href="style/tailwind.css" />
+    <!-- (2) V1 pulled this sheet in with an @import at the top of its app CSS. Here this script adds it right after
+         itself, so before (3): Google's faces still come before the local @font-face rules of amadeus.css, which
+         win for the same weight (spec-css 5.2). While fonts.googleapis.com is slow or unreachable, a pending sheet
+         that applies holds things back: Chromium does not run Trunk's deferred module loader (the app never
+         started: empty page, no error) and WebKit leaves the later app CSS unapplied (unstyled page). So the sheet
+         starts with a media that does not match, which holds back nothing, and switches to "all" once loaded; the
+         app starts and paints at once with the fallback fonts (display=swap).
+         Like (3), the sheet belongs to the app route only (D9): V1 requested it on /amadeus/app and nowhere else. Off
+         the app route (RouteStyles' path test) the link is inserted disabled, and a disabled stylesheet link is not
+         fetched. amadeus_ui::RouteStyles enables it (media back to "print", fetched again) and disables it on
+         client-side navigation, but leaves a sheet that is still loading enabled: WebKit holds back every later
+         stylesheet while a loading link that was disabled and enabled again is pending. So onload disables a sheet
+         that finishes off the app route.
+         Tauri adds this script's hash to the desktop CSP, like the loader's. -->
+    <script>
+      (function () {
+        var onApp = function () {
+          return /\/app\/*$/.test(location.pathname);
+        };
+        var sheet = document.createElement("link");
+        sheet.id = "amadeus-google-fonts";
+        sheet.rel = "stylesheet";
+        sheet.href = "https://fonts.googleapis.com/css2?family=Noto+Serif+JP:wght@300;400;700&display=swap";
+        sheet.media = "print";
+        sheet.onload = function () {
+          sheet.media = "all";
+          if (!onApp()) {
+            sheet.setAttribute("disabled", "");
+          }
+        };
+        if (!onApp()) {
+          sheet.setAttribute("disabled", "");
+        }
+        document.currentScript.after(sheet);
+      })();
+    </script>
+    <link data-trunk rel="css" href="style/amadeus.css" id="amadeus-app-css" data-no-minify />
+
+    <link data-trunk rel="copy-dir" href="../../assets/public/resources" />
+    <link data-trunk rel="copy-dir" href="../../assets/public/static" />
+    <link data-trunk rel="copy-file" href="manifest.webmanifest" />
+
+    <!-- Rust >= 1.87 emits bulk-memory / nontrapping-fptoint / sign-ext / reference-types / multivalue by default.
+         data-integrity="none": Chrome ignores `integrity` on the `<link rel="preload" as="fetch">` Trunk adds for the
+         .wasm and warns on every load (crbug.com/981419), and wasm-bindgen's own fetch carries none, so it never
+         protected anything. The loader and wasm are same-origin with content-hashed names (filehash); the
+         stylesheets keep their SRI. -->
+    <link data-trunk rel="rust" data-bin="amadeus-web" data-wasm-opt="z" data-cargo-profile="wasm-release" data-integrity="none"
+          data-wasm-opt-params="--enable-bulk-memory --enable-bulk-memory-opt --enable-nontrapping-float-to-int --enable-sign-ext --enable-mutable-globals --enable-reference-types --enable-multivalue" />
+  </head>
+  <!-- V1 app/layout.tsx root <body> classes -->
+  <body class="bg-black text-white min-h-screen selection:bg-purple-500/30 selection:text-white"></body>
+</html>

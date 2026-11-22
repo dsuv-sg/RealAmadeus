@@ -1,0 +1,46 @@
+[package]
+name = "amadeus-server"
+description = "RealAmadeus V2 web server (axum): serves the WASM frontend and the /app/api endpoints."
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+authors.workspace = true
+repository.workspace = true
+
+[lib]
+name = "amadeus_server"
+path = "src/lib.rs"
+
+[[bin]]
+name = "amadeus-server"
+path = "src/main.rs"
+doc = false
+
+# Port of V1 `scripts/amadeus-local-proxy/server.mjs` (gcloud token + Vertex region failover).
+[[bin]]
+name = "amadeus-local-proxy"
+path = "src/bin/amadeus-local-proxy.rs"
+doc = false
+
+[dependencies]
+amadeus-core.workspace = true
+amadeus-backend.workspace = true
+# Same features as amadeus-backend: JS key order + correctly rounded floats.
+serde_json = { workspace = true, features = ["preserve_order", "float_roundtrip"] }
+anyhow.workspace = true
+tokio.workspace = true
+futures-util.workspace = true
+bytes.workspace = true
+axum.workspace = true
+tower.workspace = true
+tower-http.workspace = true
+tracing.workspace = true
+tracing-subscriber.workspace = true
+clap.workspace = true
+dotenvy.workspace = true
+
+[dev-dependencies]
+tempfile = "3.27"
+# tests: custom HTTP/1 reason phrases from the mock upstream (already compiled for axum).
+hyper = { version = "1.12", default-features = false, features = ["http1", "server"] }

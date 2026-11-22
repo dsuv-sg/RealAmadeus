@@ -1,0 +1,17 @@
+<!doctype html>
+<html>
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <base data-trunk-public-url />
+    <title>live2d-viewer</title>
+    <style>
+      html, body { margin: 0; padding: 0; background: #000; width: 100%; height: 100%; overflow: hidden; }
+      #host { position: fixed; inset: 0; }
+    </style>
+    <link data-trunk rel="rust" data-bin="live2d-viewer" data-wasm-opt="0" />
+  </head>
+  <body>
+    <div id="host" class="live2d-host"></div>
+  </body>
+</html>

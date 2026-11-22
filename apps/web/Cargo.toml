@@ -1,0 +1,21 @@
+[package]
+name = "amadeus-web"
+description = "WASM entry point of RealAmadeus V2 (built with Trunk). Used by both the web server and the desktop webview."
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+authors.workspace = true
+repository.workspace = true
+publish = false
+
+[[bin]]
+name = "amadeus-web"
+path = "src/main.rs"
+
+[dependencies]
+amadeus-ui.workspace = true
+leptos.workspace = true
+console_error_panic_hook.workspace = true
+console_log.workspace = true
+log.workspace = true

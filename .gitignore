@@ -1,0 +1,27 @@
+/target/
+**/target/
+/apps/web/dist/
+/apps/web/dist-*/
+/apps/desktop/gen/
+/dist/
+/release/
+node_modules/
+.env
+.env.*
+!.env.example
+*.pem
+*.key
+# Google service-account credentials must never be committed
+realamadeusmain-*.json
+*service-account*.json
+/data/
+.DS_Store
+# Proprietary MS Mincho font must never be committed
+MSMINCHO.TTF
+msmincho.ttf
+msmincho.ttc
+MSMINCHO.TTC
+/assets/public/resources/fonts/MSMINCHO.TTF
+/assets/public/resources/fonts/msmincho.ttf
+/assets/public/resources/fonts/msmincho.ttc
+/assets/public/resources/fonts/MSMINCHO.TTC

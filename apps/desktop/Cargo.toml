@@ -1,0 +1,55 @@
+[package]
+name = "amadeus-desktop"
+description = "RealAmadeus V2 desktop app (Tauri 2) for Windows, macOS and Linux."
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+authors.workspace = true
+repository.workspace = true
+publish = false
+default-run = "amadeus-desktop"
+
+[lib]
+name = "amadeus_desktop_lib"
+crate-type = ["staticlib", "cdylib", "rlib"]
+
+[[bin]]
+name = "amadeus-desktop"
+path = "src/main.rs"
+
+[build-dependencies]
+tauri-build.workspace = true
+
+[dependencies]
+amadeus-core.workspace = true
+amadeus-backend.workspace = true
+serde.workspace = true
+serde_json.workspace = true
+anyhow.workspace = true
+tokio.workspace = true
+reqwest.workspace = true
+sha2 = "0.10"
+futures.workspace = true
+log.workspace = true
+# amadeus-backend logs through `tracing`. With the `log` feature and no tracing subscriber
+# installed, those events become `log` records and reach tauri-plugin-log (the app log file).
+tracing = { workspace = true, features = ["log"] }
+tauri.workspace = true
+tauri-plugin-opener.workspace = true
+tauri-plugin-dialog.workspace = true
+tauri-plugin-process.workspace = true
+tauri-plugin-single-instance.workspace = true
+tauri-plugin-window-state.workspace = true
+tauri-plugin-log.workspace = true
+tauri-plugin-updater = { workspace = true, optional = true }
+
+# Linux and the BSDs: tao reports the fullscreen state the app last requested, not the window's,
+# so `shell` follows GTK's window-state events. Same gtk-rs release line as Tauri's.
+[target.'cfg(any(target_os = "linux", target_os = "dragonfly", target_os = "freebsd", target_os = "netbsd", target_os = "openbsd"))'.dependencies]
+gtk = "0.18"
+
+[features]
+default = []
+# Enabled by the release workflow when TAURI_SIGNING_PRIVATE_KEY is configured.
+updater = ["dep:tauri-plugin-updater"]

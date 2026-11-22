@@ -1,0 +1,9 @@
+{
+  "$schema": "../gen/schemas/desktop-schema.json",
+  "identifier": "default",
+  "description": "Main RealAmadeus window, app origin only. core:default is Tauri's baseline (event listen/emit, read-only window/app/path getters, menu/tray/image/resource handles). Backend and platform features are custom Rust commands (docs/DESKTOP_IPC.md): Tauri accepts those from the app's own origin without entries here because no app ACL manifest is defined, and Channels need none. Dialog, log, opener, process, updater and window-state stay Rust-only (no frontend code calls their JS APIs; grant e.g. log:allow-log together with a frontend that uses it).",
+  "windows": ["main"],
+  "permissions": [
+    "core:default"
+  ]
+}

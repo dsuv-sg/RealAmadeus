@@ -1,0 +1,110 @@
+[workspace]
+resolver = "2"
+members = [
+    "crates/amadeus-core",
+    "crates/amadeus-backend",
+    "crates/amadeus-server",
+    "crates/amadeus-live2d",
+    "crates/amadeus-ui",
+    "apps/web",
+    "apps/desktop",
+    "xtask",
+    "tools/live2d-viewer",
+]
+# `cargo check` / `cargo test` without `-p` builds these. The desktop crate needs the
+# Trunk-built frontend (apps/web/dist-desktop) to exist at compile time, so it is
+# built explicitly through `cargo tauri build` / `cargo xtask desktop`.
+default-members = [
+    "crates/amadeus-core",
+    "crates/amadeus-backend",
+    "crates/amadeus-server",
+    "crates/amadeus-live2d",
+    "crates/amadeus-ui",
+    "apps/web",
+    "xtask",
+]
+
+# ---------------------------------------------------------------------------
+# Single source of truth for the release version. Every crate inherits it,
+# Tauri reads it from apps/desktop/Cargo.toml, and the UI shows it via
+# `amadeus_core::version::VERSION`. Bump with `cargo xtask bump <version>`.
+# ---------------------------------------------------------------------------
+[workspace.package]
+version = "2.0.0"
+edition = "2021"
+rust-version = "1.90"
+authors = ["DSUV / Elvelt"]
+license = "CC-BY-NC-4.0"
+repository = "https://github.com/dsuv-sg/RealAmadeus"
+
+[workspace.dependencies]
+# internal crates
+amadeus-core = { path = "crates/amadeus-core" }
+amadeus-backend = { path = "crates/amadeus-backend" }
+amadeus-live2d = { path = "crates/amadeus-live2d" }
+amadeus-ui = { path = "crates/amadeus-ui" }
+
+# shared
+serde = { version = "1.0.228", features = ["derive"] }
+serde_json = "1.0.145"
+thiserror = "2.0"
+anyhow = "1.0"
+base64 = "0.22"
+log = "0.4"
+
+# native backend / server
+tokio = { version = "1.47", features = ["full"] }
+reqwest = { version = "0.13", default-features = false, features = ["rustls", "json", "stream", "http2", "charset", "multipart", "gzip"] }
+futures = "0.3"
+futures-util = "0.3"
+bytes = "1"
+jsonwebtoken = { version = "12", default-features = false, features = ["use_pem", "rust_crypto"] }
+axum = { version = "0.8", features = ["multipart", "macros"] }
+tower = "0.5"
+tower-http = { version = "0.7", features = ["fs", "set-header", "compression-gzip", "compression-br", "trace", "cors", "limit"] }
+tracing = "0.1"
+tracing-subscriber = { version = "0.3", features = ["env-filter", "fmt"] }
+clap = { version = "4.5", features = ["derive", "env"] }
+dotenvy = "0.15"
+chrono = { version = "0.4", default-features = false, features = ["clock", "std", "serde"] }
+url = "2"
+
+# wasm frontend
+leptos = { version = "0.8", features = ["csr"] }
+leptos_router = { version = "0.8" }
+wasm-bindgen = "0.2.100"
+wasm-bindgen-futures = "0.4"
+js-sys = "0.3"
+web-sys = "0.3"
+console_error_panic_hook = "0.1"
+console_log = "1"
+gloo-timers = { version = "0.3", features = ["futures"] }
+
+# desktop
+tauri = { version = "2.12", features = [] }
+tauri-build = { version = "2.7", features = [] }
+tauri-plugin-opener = "2"
+tauri-plugin-dialog = "2"
+tauri-plugin-updater = "2"
+tauri-plugin-process = "2"
+tauri-plugin-single-instance = "2"
+tauri-plugin-window-state = "2"
+tauri-plugin-log = "2"
+
+[profile.release]
+codegen-units = 1
+lto = true
+opt-level = 3
+strip = true
+
+# WASM size matters for the web download; leptos/tauri recommend opt-level "z" or "s".
+[profile.wasm-release]
+inherits = "release"
+opt-level = "z"
+panic = "abort"
+# Keep the `target_features` custom section so wasm-bindgen can detect enabled
+# Wasm features; wasm-opt (run by Trunk) removes what is not needed.
+strip = "debuginfo"
+
+[profile.dev.package."*"]
+opt-level = 1

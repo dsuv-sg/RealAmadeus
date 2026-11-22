@@ -1,0 +1,7 @@
+# Trunk config for the l2d-compare V2 page (tools/live2d-viewer built from ./index.html, which loads
+# /shim.js first). run.sh passes --dist and --public-url; these are the defaults for a manual build:
+#   cd tools/l2d-compare/v2 && trunk build --dist <dir>
+[build]
+target = "index.html"
+release = true
+public_url = "/v2/"

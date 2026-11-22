@@ -1,0 +1,266 @@
+# CI for RealAmadeus V2 (Rust): formatting, clippy (native + wasm32), tests, the web build and
+# a desktop compile check on Windows, macOS and Linux. `cargo xtask check` runs the same gates
+# locally.
+#
+# NOTE: this file assumes RealAmadeusRust/ is the repository root. If it stays a sub-directory
+# of a larger repository, move .github/ to that root and set
+# `defaults.run.working-directory: RealAmadeusRust` (plus `workspaces: RealAmadeusRust -> target`
+# for Swatinem/rust-cache and `path:` for uploaded artifacts). See docs/RELEASE.md.
+#
+# The Linux build jobs use ubuntu-22.04 like the release workflow (glibc 2.35 baseline). GitHub
+# removes that image on 2027-04-17 (brownouts from 2027-03-23): migrate them together with
+# release.yml, see docs/RELEASE.md §5.
+
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+    inputs:
+      bundle:
+        description: "Also build the desktop installers (artifacts only, nothing is released)"
+        type: boolean
+        default: false
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ci-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
+env:
+  CARGO_TERM_COLOR: always
+  CARGO_INCREMENTAL: "0"
+  RUST_BACKTRACE: short
+  TRUNK_VERSION: "0.22.1"
+  TAURI_CLI_VERSION: "2.12.4"
+  # Crates that run in the browser; they must also be clippy-clean for wasm32.
+  WASM_CRATES: -p amadeus-core -p amadeus-live2d -p amadeus-ui -p amadeus-web
+
+defaults:
+  run:
+    shell: bash
+
+jobs:
+  lint:
+    name: Format & Clippy
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v7
+
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          components: rustfmt, clippy
+          targets: wasm32-unknown-unknown
+
+      - uses: Swatinem/rust-cache@v2
+        with:
+          key: lint
+
+      - name: cargo fmt
+        run: cargo fmt --all -- --check
+
+      # Default workspace members = every crate except the desktop app (needs the Trunk build,
+      # checked below) and developer tools.
+      - name: clippy (native)
+        run: cargo clippy --all-targets --locked -- -D warnings
+
+      - name: clippy (wasm32)
+        # WASM_CRATES is a list of `-p <crate>` arguments; word splitting is intended.
+        run: cargo clippy --target wasm32-unknown-unknown $WASM_CRATES --locked -- -D warnings
+
+  test:
+    name: Tests
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v7
+
+      - uses: dtolnay/rust-toolchain@stable
+
+      - uses: Swatinem/rust-cache@v2
+        with:
+          key: test
+
+      - name: cargo test
+        run: cargo test --locked
+
+      - name: Release tooling smoke test
+        run: |
+          cargo xtask --help > /dev/null
+          version="$(cargo xtask version)"
+          echo "Workspace version: $version"
+          cargo xtask release-notes "$version" --download-guide > "$RUNNER_TEMP/notes.md"
+          {
+            echo "### Release notes preview (v$version)"
+            echo
+            cat "$RUNNER_TEMP/notes.md"
+          } >> "$GITHUB_STEP_SUMMARY"
+
+  web:
+    name: Web build (Trunk + amadeus-server)
+    runs-on: ubuntu-22.04
+    steps:
+      - uses: actions/checkout@v7
+
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: wasm32-unknown-unknown
+
+      - uses: Swatinem/rust-cache@v2
+        with:
+          key: web
+
+      - uses: taiki-e/install-action@v2
+        with:
+          tool: trunk@${{ env.TRUNK_VERSION }}
+
+      # Same command the release workflow uses: release Trunk build + release server build,
+      # packed as release/RealAmadeus_V<ver>R_Web_Linux-x64.tar.gz.
+      - name: cargo xtask dist web
+        run: cargo xtask dist web
+
+      # Every Tailwind arbitrary-value class in the UI sources (text-[#d49e38],
+      # md:h-[calc(100vh-5rem)], ...) must be in the CSS Trunk just built into
+      # target/xtask/web-dist: a class built with format! or with a value Tailwind rejects
+      # would otherwise render unstyled without any error. `cargo xtask check` runs the same
+      # guard after its Trunk build.
+      - name: Tailwind class guard
+        run: cargo xtask check-classes --dist target/xtask/web-dist
+
+      - uses: actions/upload-artifact@v7
+        with:
+          name: web-linux-x64
+          path: release/
+          if-no-files-found: error
+          retention-days: 7
+          compression-level: 0
+
+  desktop:
+    name: Desktop check (${{ matrix.name }})
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - name: Linux
+            runner: ubuntu-22.04
+          - name: Windows
+            runner: windows-latest
+          - name: macOS
+            runner: macos-latest
+    runs-on: ${{ matrix.runner }}
+    steps:
+      - uses: actions/checkout@v7
+
+      - name: Install Linux dependencies
+        if: runner.os == 'Linux'
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends \
+            libwebkit2gtk-4.1-dev libappindicator3-dev librsvg2-dev patchelf \
+            libsoup-3.0-dev libjavascriptcoregtk-4.1-dev
+
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          components: clippy
+          targets: wasm32-unknown-unknown
+
+      - uses: Swatinem/rust-cache@v2
+        with:
+          key: desktop
+
+      - uses: taiki-e/install-action@v2
+        with:
+          tool: trunk@${{ env.TRUNK_VERSION }}
+
+      # The desktop crate embeds apps/web/dist-desktop at compile time. A debug Trunk build is
+      # enough for a compile check and also proves Trunk works on this OS.
+      - name: Build the desktop frontend (dist-desktop)
+        working-directory: apps/web
+        env:
+          # Git Bash on Windows would rewrite the lone "/" argument into a Windows path.
+          MSYS_NO_PATHCONV: "1"
+        run: trunk build --public-url / --dist dist-desktop
+
+      - name: cargo check (amadeus-desktop)
+        run: cargo check -p amadeus-desktop --locked
+
+      - name: clippy (amadeus-desktop)
+        run: cargo clippy -p amadeus-desktop --all-targets --locked -- -D warnings
+
+      # The release workflow enables this feature when TAURI_SIGNING_PRIVATE_KEY is configured;
+      # make sure it keeps compiling.
+      - name: clippy (amadeus-desktop, updater feature)
+        run: cargo clippy -p amadeus-desktop --all-targets --features updater --locked -- -D warnings
+
+      - name: xtask on ${{ matrix.name }}
+        run: |
+          cargo test -p xtask --locked
+          cargo xtask version
+
+  bundle:
+    name: Installers (${{ matrix.name }})
+    if: github.event_name == 'workflow_dispatch' && inputs.bundle
+    needs: [desktop]
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - name: Linux x64
+            runner: ubuntu-22.04
+            targets: wasm32-unknown-unknown
+            xtask_args: ""
+          - name: Windows x64
+            runner: windows-latest
+            targets: wasm32-unknown-unknown
+            xtask_args: ""
+          - name: macOS universal
+            runner: macos-latest
+            targets: wasm32-unknown-unknown,aarch64-apple-darwin,x86_64-apple-darwin
+            xtask_args: --target universal-apple-darwin
+    runs-on: ${{ matrix.runner }}
+    steps:
+      - uses: actions/checkout@v7
+
+      - name: Install Linux dependencies
+        if: runner.os == 'Linux'
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends \
+            libwebkit2gtk-4.1-dev libappindicator3-dev librsvg2-dev patchelf \
+            libsoup-3.0-dev libjavascriptcoregtk-4.1-dev \
+            xdg-utils file gstreamer1.0-plugins-base gstreamer1.0-plugins-good
+
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: ${{ matrix.targets }}
+
+      - uses: Swatinem/rust-cache@v2
+        with:
+          key: bundle
+
+      - uses: taiki-e/install-action@v2
+        with:
+          tool: trunk@${{ env.TRUNK_VERSION }}
+
+      # Same pinned CLI as the release workflow (prebuilt npm package, no compile).
+      - name: Install the Tauri CLI
+        run: npm install --global "@tauri-apps/cli@${TAURI_CLI_VERSION}"
+
+      - name: Build installers
+        env:
+          # xtask runs `cargo tauri` unless TAURI_CLI names another CLI (npm: tauri / tauri.cmd).
+          TAURI_CLI: ${{ runner.os == 'Windows' && 'tauri.cmd' || 'tauri' }}
+          XTASK_ARGS: ${{ matrix.xtask_args }}
+        # XTASK_ARGS is a (possibly empty) list of flags; word splitting is intended.
+        run: cargo xtask dist desktop $XTASK_ARGS
+
+      - uses: actions/upload-artifact@v7
+        with:
+          name: installers-${{ runner.os }}
+          path: release/
+          if-no-files-found: error
+          retention-days: 7
+          compression-level: 0

@@ -1,0 +1,88 @@
+<!doctype html>
+<html>
+  <head>
+    <meta charset="utf-8" />
+    <!-- l2d-compare: the deterministic shim MUST be the first script of the page. -->
+    <script src="/shim.js"></script>
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <link rel="icon" href="data:," />
+    <title>l2d-compare V1</title>
+    <style>
+      html, body { margin: 0; padding: 0; background: #000; width: 100%; height: 100%; overflow: hidden; }
+      #host { position: fixed; inset: 0; }
+    </style>
+  </head>
+  <body>
+    <div id="host" class="live2d-host"></div>
+    <script>
+      // V1 reference page: V1's deployed bundle (reama-cubism-runtime.js) driven exactly like V1's
+      // components/amadeus/Live2DCanvas.tsx mount, minus its load race: the Core is loaded and ready BEFORE
+      // the runtime script is evaluated and before create() (this harness compares rendering, not load
+      // races). Query: emotion=<tag> (default NORMAL), resources=<prefix> (default /resources/; V1's bundle
+      // itself hard-codes /resources/models/... for the model), lip=<0..1> (default 0), char=<spoken char>
+      // (default ""), eyeX/eyeY (setEyeTracking, only when given) — the same names and defaults as the V2
+      // viewer (tools/live2d-viewer/src/main.rs) — plus the shim's frames/seed/timeout/do.
+      (function () {
+        var q = new URLSearchParams(location.search);
+        var res = q.get('resources') || '/resources/';
+        function load(src) {
+          return new Promise(function (resolve, reject) {
+            var s = document.createElement('script');
+            s.src = src;
+            s.async = true;
+            s.onload = function () { resolve(); };
+            s.onerror = function () { reject(new Error('Failed to load ' + src)); };
+            document.head.appendChild(s);
+          });
+        }
+        function coreReady() {
+          try {
+            return typeof window.Live2DCubismCore.Version.csmGetVersion() === 'number';
+          } catch (e) {
+            return false;
+          }
+        }
+        (async function () {
+          try {
+            await load(res + 'live2d/live2dcubismcore.min.js');
+            for (var i = 0; !coreReady(); i++) {
+              if (i > 2000) throw new Error('Live2DCubismCore never became ready');
+              await new Promise(function (r) { setTimeout(r, 5); });
+            }
+            await load(res + 'live2d/reama-cubism-runtime.js?v=19');
+            var rt = window.ReamaCubismRuntime;
+            if (!rt) throw new Error('window.ReamaCubismRuntime missing');
+            var host = document.getElementById('host');
+            // Live2DCanvas: create → setEmotion(emotion.toUpperCase()) → setLipSync → setSpokenChar → canvas styles.
+            var p = rt.create(host);
+            var num = function (name) {
+              var v = parseFloat(q.get(name) || '');
+              return isFinite(v) ? v : null;
+            };
+            p.setEmotion((q.get('emotion') || 'NORMAL').toUpperCase());
+            p.setLipSync(num('lip') !== null ? num('lip') : 0);
+            if (p.setSpokenChar) p.setSpokenChar(q.get('char') || '');
+            // Live2DCanvas's own setEyeTracking(0, 0) runs before the player exists (a no-op); the viewer
+            // always calls set_eye_tracking(eyeX || 0, eyeY || 0), which only clamps and stores (same state).
+            if ((num('eyeX') !== null || num('eyeY') !== null) && p.setEyeTracking) {
+              p.setEyeTracking(num('eyeX') || 0, num('eyeY') || 0);
+            }
+            var applyCanvasStyles = function () {
+              var c = host.querySelector('canvas');
+              if (!c) return false;
+              c.style.pointerEvents = 'auto';
+              c.style.width = '100%';
+              c.style.height = '100%';
+              return true;
+            };
+            if (!applyCanvasStyles()) setTimeout(applyCanvasStyles, 100);
+            window.v1Player = p;
+            window.__l2dCompareApi = p; // the shim's do= actions
+          } catch (e) {
+            console.error('[l2d-compare] V1 page failed', e);
+          }
+        })();
+      })();
+    </script>
+  </body>
+</html>

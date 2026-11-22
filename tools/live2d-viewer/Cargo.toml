@@ -1,0 +1,25 @@
+[package]
+name = "live2d-viewer"
+description = "Developer tool: renders the Amadeus Live2D model with amadeus-live2d (Trunk app) for visual verification against V1."
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+publish = false
+
+[[bin]]
+name = "live2d-viewer"
+path = "src/main.rs"
+
+[dependencies]
+amadeus-live2d.workspace = true
+wasm-bindgen.workspace = true
+wasm-bindgen-futures.workspace = true
+js-sys.workspace = true
+console_error_panic_hook.workspace = true
+console_log.workspace = true
+log.workspace = true
+
+[dependencies.web-sys]
+workspace = true
+features = ["Window", "Document", "Element", "HtmlElement", "Location", "UrlSearchParams", "Url", "console"]

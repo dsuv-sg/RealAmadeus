@@ -1,0 +1,7 @@
+[alias]
+# Release / build automation written in Rust: `cargo xtask help`
+xtask = "run --quiet --package xtask --"
+
+[target.wasm32-unknown-unknown]
+# In case any dependency pulls in getrandom >= 0.3 on wasm, use the JS backend.
+rustflags = ['--cfg', 'getrandom_backend="wasm_js"']

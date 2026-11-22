@@ -1,0 +1,53 @@
+[package]
+name = "amadeus-ui"
+description = "RealAmadeus V2 user interface (Leptos CSR): all pages, panels and browser services."
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+authors.workspace = true
+repository.workspace = true
+
+[dependencies]
+amadeus-core.workspace = true
+amadeus-live2d.workspace = true
+serde.workspace = true
+serde_json.workspace = true
+thiserror.workspace = true
+log.workspace = true
+leptos.workspace = true
+leptos_router.workspace = true
+wasm-bindgen.workspace = true
+wasm-bindgen-futures.workspace = true
+js-sys.workspace = true
+gloo-timers.workspace = true
+futures.workspace = true
+
+[dependencies.web-sys]
+workspace = true
+features = [
+  "console", "Window", "Document", "Element", "HtmlElement", "HtmlInputElement", "HtmlTextAreaElement",
+  "HtmlSelectElement", "HtmlAudioElement", "HtmlMediaElement", "HtmlCanvasElement", "HtmlAnchorElement",
+  "HtmlDivElement", "HtmlImageElement", "HtmlButtonElement", "HtmlCollection",
+  "Storage", "Location", "History", "Navigator", "Screen", "MediaQueryList", "MediaQueryListEvent",
+  "Event", "EventTarget", "KeyboardEvent", "MouseEvent", "WheelEvent", "PointerEvent", "TouchEvent", "FocusEvent",
+  "InputEvent", "CustomEvent", "AddEventListenerOptions", "EventListener",
+  "CssStyleDeclaration", "DomRect", "DomTokenList", "ScrollIntoViewOptions", "ScrollBehavior", "ScrollLogicalPosition",
+  "Blob", "BlobPropertyBag", "File", "FileList", "FileReader", "Url", "FormData",
+  "Request", "RequestInit", "RequestMode", "RequestCache", "Response", "Headers", "ReadableStream",
+  "ReadableStreamDefaultReader", "AbortController", "AbortSignal", "TextDecoder", "TextDecodeOptions", "TextEncoder",
+  "AudioContext", "AudioContextState", "BaseAudioContext", "AudioNode", "AudioParam", "AudioDestinationNode",
+  "AudioBuffer", "AudioBufferSourceNode", "AnalyserNode", "GainNode", "MediaElementAudioSourceNode",
+  "MediaStreamAudioSourceNode", "ScriptProcessorNode", "AudioProcessingEvent",
+  "MediaDevices", "MediaStream", "MediaStreamTrack", "MediaStreamConstraints", "MediaRecorder",
+  "MediaRecorderOptions", "BlobEvent", "MediaTrackConstraints",
+  "Performance", "VisibilityState", "Document", "Element", "Node", "NodeList",
+  "IdbFactory", "IdbDatabase", "IdbOpenDbRequest", "IdbRequest", "IdbTransaction", "IdbTransactionMode",
+  "IdbObjectStore", "IdbVersionChangeEvent", "IdbObjectStoreParameters", "IdbCursorWithValue", "IdbKeyRange",
+  "Clipboard", "SpeechSynthesis", "SpeechSynthesisUtterance", "SpeechSynthesisVoice",
+  "Notification", "NotificationOptions", "NotificationPermission",
+  # ui-foundation: viewport watcher, Live2D context release
+  "VisualViewport", "WebGlRenderingContext", "WebGl2RenderingContext", "WebglLoseContext",
+  # ui-services: MediaRecorder state
+  "RecordingState",
+]

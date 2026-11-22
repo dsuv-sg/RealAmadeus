@@ -1,0 +1,596 @@
+{
+  "common": {
+    "returnMain": "RETURN TO MAIN",
+    "systemOnline": "SYSTEM ONLINE",
+    "terminateSession": "TERMINATE SESSION"
+  },
+  "home": {
+    "role": "Lead Architect at ELVELT",
+    "tagline": "Architecting the Unknown.",
+    "activeProjects": "Active Projects",
+    "projects": {
+      "amadeus": {
+        "title": "RealAmadeus",
+        "desc": "Steins;Gate AI system reproduction. Dialogue logic implementation."
+      },
+      "elvelt": {
+        "title": "ELVELT",
+        "desc": "Next-generation compiler infrastructure and toolchain development."
+      }
+    },
+    "socials": {
+      "twitter": {
+        "label": "X",
+        "sub": "Posts"
+      },
+      "github": {
+        "label": "GitHub",
+        "sub": "Source Code"
+      },
+      "youtube": {
+        "label": "YouTube",
+        "sub": "Video Content"
+      },
+      "support": {
+        "label": "Support",
+        "sub": "Support my work"
+      }
+    }
+  },
+  "amadeus": {
+    "status": {
+      "system": "SYSTEM",
+      "ver": "VER 1.04a",
+      "connecting": "CONNECTING TO KURISU..."
+    },
+    "button": {
+      "init": "INITIALIZE SYSTEM"
+    },
+    "panels": {
+      "goal": {
+        "title": "PROJECT GOAL",
+        "content": "Complete reproduction of the Amadeus AI system logic as depicted in Steins;Gate 0."
+      },
+      "status": {
+        "title": "CURRENT STATUS",
+        "content": "Memory Graph Implementation Phase. Context maintenance efficiency: 87%."
+      },
+      "access": {
+        "title": "ACCESS LEVEL",
+        "content": "Restricted. Developer key required for neural network adjustments."
+      }
+    },
+    "hud": {
+      "logic": "LOGIC ENGINE",
+      "voice": "VOICE SYNTHESIS",
+      "memory": "MEMORY CORE"
+    },
+    "accessRestricted": {
+      "title": "Access Restricted",
+      "desc": "Public access to the Amadeus system is currently limited to authorized researchers.",
+      "button": "INITIATE_CONNECTION..."
+    },
+    "login": {
+      "userId": "USER ID",
+      "password": "PASSWORD",
+      "connect": "CONNECT",
+      "placeholderId": "Salieri",
+      "error": "AUTH ERROR: INVALID ID OR PASSWORD"
+    },
+    "preparation": {
+      "title": "SYSTEM PREPARATION",
+      "message": "PREPARING...",
+      "status": "INITIALIZING..."
+    },
+    "release": {
+      "title": "SYSTEM V2.0 RELEASED",
+      "message": "REAL AMADEUS V2.0 HAS BEEN OFFICIALLY RELEASED.",
+      "windowsDownload": "Windows",
+      "macosDownload": "MacOS",
+      "linuxDownload": "Linux",
+      "lightweightWindowsDownload": "Lightweight Windows",
+      "download": "DOWNLOAD",
+      "githubRepo": "GitHub Repository",
+      "docs": "Documentation",
+      "webVersion": "Web Version"
+    },
+    "docs": {
+      "title": "DOCUMENTATION",
+      "back": "RETURN TO SYSTEM",
+      "sidebar": {
+        "gettingStarted": "Getting Started",
+        "download": "Download",
+        "login": "Login Instructions",
+        "controls": "Controls",
+        "apiSetup": "API Setup",
+        "apiOpenAI": "OpenAI API",
+        "apiGemini": "Google Gemini API",
+        "apiClaude": "Anthropic Claude API",
+        "apiGroq": "Groq API",
+        "apiVertex": "Google Vertex AI"
+      },
+      "gettingStarted": {
+        "title": "GETTING STARTED",
+        "desc": "RealAmadeus aims to reproduce the artificial intelligence system 'Amadeus' featured in Steins;Gate 0. This documentation explains the procedures to operate the system and utilize its full capabilities.",
+        "loginInfo": "This system is developed for research purposes. Initial setup and API configuration are required to engage in advanced dialogue with the AI."
+      },
+      "download": {
+        "title": "DOWNLOAD",
+        "desc": "Legacy (V1) archive builds are available in two editions: Unity and Qt. For normal use, please use the latest Rust edition (V2) above.",
+        "standardTitle": "Legacy Edition (Unity) RealAmadeusUnity",
+        "standardDesc": "Legacy edition developed with the Unity engine. Available for Windows, MacOS, and Linux.",
+        "lightweightTitle": "Legacy Edition (Qt / Lightweight) RealAmadeusQT",
+        "lightweightDesc": "Legacy edition developed with Qt/QML. Features lightweight performance.",
+        "recommendedEnv": "Recommended Environment",
+        "standardEnv": "GPU-equipped environment / Environment with 1GB+ RAM",
+        "lightweightEnv": "No GPU / Low-spec environment",
+        "windows": "Windows",
+        "mac": "MacOS",
+        "linux": "Linux",
+        "downloadBtn": "DOWNLOAD",
+        "releasesPage": "Releases Page",
+        "fallbackStandard": {
+          "$rich": [
+            {
+              "type": "text",
+              "text": "If the download buttons above do not work, please download directly from "
+            },
+            {
+              "type": "link",
+              "href": "https://github.com/dsuv-sg/RealAmadeusUnity/releases",
+              "text": "RealAmadeusUnity Releases"
+            },
+            {
+              "type": "text",
+              "text": " (Unity / Legacy)."
+            }
+          ]
+        },
+        "fallbackLightweight": {
+          "$rich": [
+            {
+              "type": "text",
+              "text": "If the download buttons above do not work, please download directly from "
+            },
+            {
+              "type": "link",
+              "href": "https://github.com/dsuv-sg/RealAmadeusQT/releases",
+              "text": "RealAmadeusQT Releases"
+            },
+            {
+              "type": "text",
+              "text": " (Qt / Legacy)."
+            }
+          ]
+        },
+        "steps": [
+          {
+            "title": "Download the Asset for Your OS",
+            "content": "From the Assets section, download the file corresponding to your OS. Builds for Windows, MacOS, and Linux are provided (Lightweight edition is Windows only)."
+          },
+          {
+            "title": "Extract the Files",
+            "content": "Extract the downloaded archive to a folder of your choice."
+          }
+        ],
+        "fileStructure": {
+          "title": "About the File Structure",
+          "windows": "After extraction, the Build folder contains RealAmadeus.exe (executable), RealAmadeus_Data/ (assets and data), UnityPlayer.dll, MonoBleedingEdge/, D3D12/, and other runtime files. Please keep the folder structure intact and run RealAmadeus.exe.",
+          "mac": "After extraction, the Build folder contains the Mac.app bundle. Move Mac.app to your Applications folder or another suitable location. The bundle includes the executable (MacOS/RealAmadeus), Frameworks/, PlugIns/, Resources/, and MonoBleedingEdge/.",
+          "linux": "After extraction, the Build folder contains RealAmadeus.x86_64 (executable), RealAmadeus_Data/ (data), UnityPlayer.so, libdecor-0.so.0, libdecor-cairo.so, and other files. Please grant execution permissions before launching.",
+          "windowsQT": "After extraction, the Build folder contains appRealAmadeusPC.exe (executable), RealAmadeusPC/ (QML resources), numerous Qt6*.dll files, platforms/, qml/, imageformats/, Live2DCubismCore.dll, FrameworkShaders/, translations/, and other required libraries. Please keep the folder structure intact and run appRealAmadeusPC.exe."
+        },
+        "notice": "* Functionality on non-Windows operating systems is unconfirmed. If you encounter any issues, please report them via GitHub Issues."
+      },
+      "changelog": {
+        "title": "CHANGELOG",
+        "desc": "Major updates for RealAmadeus.",
+        "versions": [
+          {
+            "version": "V1.4",
+            "product": "RealAmadeus",
+            "items": [
+              "Implemented startup messages",
+              "Implemented a mini-game (quiz)",
+              "Added an achievements feature",
+              "Conversation language can now be set independently from the display language",
+              "Added export/import support for conversation logs",
+              "Improved font rendering, including dynamic loading and automatic downloading of MS Mincho",
+              "Disabled window resizing via dragging",
+              "Added support for Hebrew and Arabic",
+              "Changed localization fonts to Noto Serif"
+            ]
+          },
+          {
+            "version": "V1.3",
+            "product": "RealAmadeus",
+            "items": [
+              "Implemented sleep motion for Live2D",
+              "Implemented use of OpenAI compatible APIs and base URL specification",
+              "Adjusted UI",
+              "Implemented response loading cancellation",
+              "Implemented Live2D lip-sync",
+              "Fixed scaling to maintain aspect ratio",
+              "Fixed deadlock during API streaming communication",
+              "Improved security by encrypting API keys",
+              "Implemented RAG data persistence and vector DB connection optimization",
+              "Added support for Portuguese, Ukrainian, and Turkish",
+              "Changed default screen mode to windowed to prevent flickering and startup failures",
+              "Implemented automatic latest release checks and auto-updater on startup",
+              "Improved conversation text segmentation for non-Japanese languages",
+              "Optimized localization management"
+            ]
+          },
+          {
+            "version": "V1.2",
+            "product": "RealAmadeusQT",
+            "items": [
+              "Added support for Chinese, Korean, Spanish, French, German, and Russian",
+              "Added eye tracking",
+              "Implemented desktop notification feature",
+              "Added lightweight mode",
+              "Implemented screen mode toggle with Alt+Enter and F11",
+              "Added Ollama and OpenRouter API providers",
+              "Fixed UI bugs",
+              "Improved security for API keys",
+              "Improved performance"
+            ]
+          },
+          {
+            "version": "V1.1",
+            "product": "RealAmadeus",
+            "items": [
+              "Implemented click selection for the menu screen",
+              "Added language switching between Japanese and English",
+              "Added [Close/Cancel/Apply] buttons to various screens",
+              "Implemented scrollbars for ChangeLog and BackLog",
+              "Updated UI elements for better visibility",
+              "Started release of the lightweight version"
+            ]
+          },
+          {
+            "version": "V1.0.1",
+            "product": "RealAmadeus",
+            "items": [
+              "Fixed an issue where GPU usage was abnormally high",
+              "Fixed a window scaling issue when minimizing in fullscreen",
+              "Fixed an issue where re-logging in after logout was impossible",
+              "Fixed a bug where emotion tags were appearing for some AI services"
+            ]
+          },
+          {
+            "version": "V1.0",
+            "product": "RealAmadeus",
+            "items": [
+              "Released the first version of Real Amadeus",
+              "Implemented basic conversation features"
+            ]
+          }
+        ]
+      },
+      "loginDoc": {
+        "title": "SYSTEM LOGIN",
+        "desc": "Authentication details required to access the system. Enter the following credentials.",
+        "idLabel": "User ID",
+        "idValue": "Salieri",
+        "passLabel": "Password",
+        "passValue": "MakiseKurisu"
+      },
+      "controls": {
+        "title": "KEYBOARD CONTROLS",
+        "desc": "Various operations within the Amadeus system are performed via keyboard and mouse.",
+        "items": [
+          {
+            "key": "Enter",
+            "desc": "Confirm / Execute Login"
+          },
+          {
+            "key": "Tab / Right-click",
+            "desc": "Open/Close System Menu"
+          },
+          {
+            "key": "W A S D / Arrows",
+            "desc": "Navigate menus and settings"
+          },
+          {
+            "key": "Backspace",
+            "desc": "Close Backlog / Save Settings & Exit"
+          },
+          {
+            "key": "Alt + Enter / F11",
+            "desc": "Toggle Fullscreen / Windowed Mode"
+          }
+        ]
+      },
+      "api": {
+        "title": "API CONFIGURATION",
+        "desc": "To converse with the AI, you must configure an external LLM provider API key.",
+        "steps": [
+          "After booting, press 'Tab' or 'Right-Click' to open the system menu.",
+          "Select 'CONFIG' and proceed to the 'API Settings' tab.",
+          "Select your preferred AI model from the 'API Provider' dropdown.",
+          "Input the 'API Key' and 'Model Name', then save your settings (Backspace)."
+        ],
+        "notice": "* All API keys are stored locally. Communications occur directly with the provider servers. DSUV does not collect or transmit this data.",
+        "modelLabels": {
+          "title": "SUPPORTED MODELS",
+          "available": "Available",
+          "recommended": "Recommended"
+        }
+      },
+      "apiOpenAI": {
+        "title": "OpenAI API",
+        "desc": "High precision models like ChatGPT. Easy to configure and extremely stable.",
+        "modelList": {
+          "available": [
+            "gpt-6.2-astra",
+            "gpt-6.2-sol",
+            "gpt-6.1-terra",
+            "gpt-6-luna",
+            "gpt-5.6-sol",
+            "gpt-5.6-terra",
+            "gpt-5.6-luna"
+          ],
+          "recommended": "gpt-6.2-sol"
+        },
+        "steps": [
+          {
+            "title": "Create Account",
+            "content": {
+              "$rich": [
+                {
+                  "type": "text",
+                  "text": "Visit "
+                },
+                {
+                  "type": "link",
+                  "href": "https://platform.openai.com/",
+                  "text": "OpenAI Platform (platform.openai.com)"
+                },
+                {
+                  "type": "text",
+                  "text": " and register."
+                }
+              ]
+            }
+          },
+          {
+            "title": "Billing Setup",
+            "content": "You must register a credit card (Pay as you go) via the Billing section."
+          },
+          {
+            "title": "Generate Key",
+            "content": "Click 'Create new secret key' on the API Keys page to get your sk-... key."
+          },
+          {
+            "title": "Configure Amadeus",
+            "content": "Open CONFIG > API Settings from the system menu. Enter the API key and desired model name (e.g., gpt-6.2-sol) and save."
+          }
+        ]
+      },
+      "apiGemini": {
+        "title": "Google Gemini API",
+        "desc": "Fast and supports large context windows. Easy to acquire with a Google Account, includes a free tier.",
+        "modelList": {
+          "available": [
+            "gemini-4-carbon",
+            "gemini-4-argon",
+            "gemini-4-neon",
+            "gemini-4-hydrogen",
+            "gemini-3.8-flash",
+            "gemini-3.6-flash",
+            "gemini-3.5-flash-lite"
+          ],
+          "recommended": "gemini-3.8-flash"
+        },
+        "steps": [
+          {
+            "title": "Google AI Studio",
+            "content": {
+              "$rich": [
+                {
+                  "type": "text",
+                  "text": "Visit "
+                },
+                {
+                  "type": "link",
+                  "href": "https://aistudio.google.com/",
+                  "text": "Google AI Studio (aistudio.google.com)"
+                },
+                {
+                  "type": "text",
+                  "text": " and log in."
+                }
+              ]
+            }
+          },
+          {
+            "title": "Create Project & Key",
+            "content": "Select 'Get API key' and generate a new key for a new project."
+          },
+          {
+            "title": "Configure Amadeus",
+            "content": "Open CONFIG > API Settings from the system menu. Enter the API key and desired model name (e.g., gemini-3.8-flash) and save."
+          }
+        ]
+      },
+      "apiClaude": {
+        "title": "Anthropic Claude API",
+        "desc": "Provides extremely natural Japanese and advanced reasoning. Ideal for complex dialogues.",
+        "modelList": {
+          "available": [
+            "claude-fable-5-2",
+            "claude-opus-5-5",
+            "claude-sonnet-5-5",
+            "claude-haiku-5-5",
+            "claude-opus-4-6",
+            "claude-sonnet-4-6"
+          ],
+          "recommended": "claude-sonnet-5-5"
+        },
+        "steps": [
+          {
+            "title": "Registration",
+            "content": {
+              "$rich": [
+                {
+                  "type": "text",
+                  "text": "Register at the "
+                },
+                {
+                  "type": "link",
+                  "href": "https://console.anthropic.com/",
+                  "text": "Anthropic Console (console.anthropic.com)"
+                },
+                {
+                  "type": "text",
+                  "text": "."
+                }
+              ]
+            }
+          },
+          {
+            "title": "Billing Setup",
+            "content": "Add credits via Settings > Billing."
+          },
+          {
+            "title": "Generate Key",
+            "content": "Click 'Create Key' in the API Keys section to get your sk-ant-... key."
+          },
+          {
+            "title": "Configure Amadeus",
+            "content": "Open CONFIG > API Settings from the system menu. Enter the API key and desired model name (e.g., claude-sonnet-5-5) and save."
+          }
+        ]
+      },
+      "apiGroq": {
+        "title": "Groq API",
+        "desc": "LPU-powered platform with astonishing inference speeds. Characterized by rapid responses.",
+        "modelList": {
+          "available": [
+            "qwen/qwen3.8-27b",
+            "qwen/qwen3.6-27b",
+            "openai/gpt-oss-120b",
+            "openai/gpt-oss-20b",
+            "groq/compound",
+            "llama-3.3-70b-versatile",
+            "llama-3.1-8b-instant"
+          ],
+          "recommended": "qwen/qwen3.8-27b"
+        },
+        "steps": [
+          {
+            "title": "Groq Console",
+            "content": {
+              "$rich": [
+                {
+                  "type": "text",
+                  "text": "Access the "
+                },
+                {
+                  "type": "link",
+                  "href": "https://console.groq.com/",
+                  "text": "Groq Console (console.groq.com)"
+                },
+                {
+                  "type": "text",
+                  "text": " and log in."
+                }
+              ]
+            }
+          },
+          {
+            "title": "Generate Key",
+            "content": "Select 'Create API Key' in the API Keys section to generate your key."
+          },
+          {
+            "title": "Configure Amadeus",
+            "content": "Open CONFIG > API Settings from the system menu. Enter the API key and desired model name (e.g., qwen/qwen3.8-27b) and save."
+          }
+        ]
+      },
+      "apiVertex": {
+        "title": "Google Vertex AI",
+        "desc": "Enterprise AI development platform on GCP. RealAmadeus automatically retrieves credentials by invoking the Google Cloud CLI via PowerShell.",
+        "modelList": {
+          "available": [
+            "gemini-4-carbon",
+            "gemini-4-argon",
+            "gemini-4-neon",
+            "gemini-4-hydrogen",
+            "gemini-3.8-flash",
+            "gemini-3.6-flash",
+            "gemini-3.5-flash-lite"
+          ],
+          "recommended": "gemini-3.8-flash"
+        },
+        "steps": [
+          {
+            "title": "Registration",
+            "content": {
+              "$rich": [
+                {
+                  "type": "text",
+                  "text": "Register for "
+                },
+                {
+                  "type": "link",
+                  "href": "https://console.cloud.google.com/",
+                  "text": "Google Cloud (console.cloud.google.com)"
+                },
+                {
+                  "type": "text",
+                  "text": "."
+                }
+              ]
+            }
+          },
+          {
+            "title": "Enable Trial Account",
+            "content": "Enable your Google Cloud free trial account."
+          },
+          {
+            "title": "Create Project",
+            "content": "Create a new Google Cloud Project."
+          },
+          {
+            "title": "Enable Vertex AI API",
+            "content": "Enable the Vertex AI API for your project."
+          },
+          {
+            "title": "Install Google Cloud CLI",
+            "content": {
+              "$rich": [
+                {
+                  "type": "text",
+                  "text": "Download and install the "
+                },
+                {
+                  "type": "link",
+                  "href": "https://dl.google.com/dl/cloudsdk/channels/rapid/GoogleCloudSDKInstaller.exe?hl=ja",
+                  "text": "Google Cloud CLI (gcloud) Installer"
+                },
+                {
+                  "type": "text",
+                  "text": ". After installation, open Command Prompt (cmd) and run "
+                },
+                {
+                  "type": "code",
+                  "text": "gcloud auth login"
+                },
+                {
+                  "type": "text",
+                  "text": " to authenticate."
+                }
+              ]
+            }
+          },
+          {
+            "title": "Configure Amadeus",
+            "content": "Check the Project ID created in Step 3. Select 'Vertex AI' in the CONFIG menu. Enter your Project ID and Model Name (e.g., gemini-3.8-flash). The system will automatically fetch the auth token via gcloud."
+          }
+        ]
+      }
+    }
+  }
+}

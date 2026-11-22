@@ -1,0 +1,1005 @@
+{
+ "coreVersion": 100663297,
+ "latestMocVersion": 6,
+ "mocVersionFromBytes": 5,
+ "cubismMocGetMocVersion": 5,
+ "hasMocConsistency": true,
+ "canvas": {
+  "CanvasWidth": 7000,
+  "CanvasHeight": 10000,
+  "CanvasOriginX": 3500,
+  "CanvasOriginY": 5000,
+  "PixelsPerUnit": 7000,
+  "getCanvasWidth": 1,
+  "getCanvasHeight": 1.4285714285714286
+ },
+ "parameterCount": 27,
+ "parameters": [
+  {
+   "index": 0,
+   "id": "ParamAngleX",
+   "type": 0,
+   "min": -30,
+   "max": 30,
+   "default": 0,
+   "value": 0,
+   "repeat": 0,
+   "keyCount": 3,
+   "keyValues": [
+    -30,
+    0,
+    30
+   ]
+  },
+  {
+   "index": 1,
+   "id": "ParamAngleY",
+   "type": 0,
+   "min": -30,
+   "max": 30,
+   "default": 0,
+   "value": 0,
+   "repeat": 0,
+   "keyCount": 3,
+   "keyValues": [
+    -30,
+    0,
+    30
+   ]
+  },
+  {
+   "index": 2,
+   "id": "ParamAngleZ",
+   "type": 0,
+   "min": -30,
+   "max": 30,
+   "default": 0,
+   "value": 0,
+   "repeat": 0,
+   "keyCount": 3,
+   "keyValues": [
+    -30,
+    0,
+    30
+   ]
+  },
+  {
+   "index": 3,
+   "id": "ParamEyeLOpen",
+   "type": 0,
+   "min": 0,
+   "max": 1,
+   "default": 1,
+   "value": 1,
+   "repeat": 0,
+   "keyCount": 2,
+   "keyValues": [
+    0,
+    1
+   ]
+  },
+  {
+   "index": 4,
+   "id": "ParamEyeLSmile",
+   "type": 0,
+   "min": 0,
+   "max": 1,
+   "default": 0,
+   "value": 0,
+   "repeat": 0,
+   "keyCount": 2,
+   "keyValues": [
+    0,
+    1
+   ]
+  },
+  {
+   "index": 5,
+   "id": "ParamEyeROpen",
+   "type": 0,
+   "min": 0,
+   "max": 1,
+   "default": 1,
+   "value": 1,
+   "repeat": 0,
+   "keyCount": 2,
+   "keyValues": [
+    0,
+    1
+   ]
+  },
+  {
+   "index": 6,
+   "id": "ParamEyeRSmile",
+   "type": 0,
+   "min": 0,
+   "max": 1,
+   "default": 0,
+   "value": 0,
+   "repeat": 0,
+   "keyCount": 2,
+   "keyValues": [
+    0,
+    1
+   ]
+  },
+  {
+   "index": 7,
+   "id": "ParamEyeBallX",
+   "type": 0,
+   "min": -1,
+   "max": 1,
+   "default": 0,
+   "value": 0,
+   "repeat": 0,
+   "keyCount": 3,
+   "keyValues": [
+    -1,
+    0,
+    1
+   ]
+  },
+  {
+   "index": 8,
+   "id": "ParamEyeBallY",
+   "type": 0,
+   "min": -1,
+   "max": 1,
+   "default": 0,
+   "value": 0,
+   "repeat": 0,
+   "keyCount": 3,
+   "keyValues": [
+    -1,
+    0,
+    1
+   ]
+  },
+  {
+   "index": 9,
+   "id": "ParamBrowLForm",
+   "type": 0,
+   "min": -1,
+   "max": 1,
+   "default": 0,
+   "value": 0,
+   "repeat": 0,
+   "keyCount": 5,
+   "keyValues": [
+    -1,
+    -0.699999988079071,
+    0,
+    0.699999988079071,
+    1
+   ]
+  },
+  {
+   "index": 10,
+   "id": "ParamBrowLY",
+   "type": 0,
+   "min": -1,
+   "max": 1,
+   "default": 0,
+   "value": 0,
+   "repeat": 0,
+   "keyCount": 3,
+   "keyValues": [
+    -1,
+    0,
+    1
+   ]
+  },
+  {
+   "index": 11,
+   "id": "ParamBrowRAngle",
+   "type": 0,
+   "min": -1,
+   "max": 1,
+   "default": 0,
+   "value": 0,
+   "repeat": 0,
+   "keyCount": 0,
+   "keyValues": []
+  },
+  {
+   "index": 12,
+   "id": "ParamBrowLX",
+   "type": 0,
+   "min": -1,
+   "max": 1,
+   "default": 0,
+   "value": 0,
+   "repeat": 0,
+   "keyCount": 0,
+   "keyValues": []
+  },
+  {
+   "index": 13,
+   "id": "ParamBrowRX",
+   "type": 0,
+   "min": -1,
+   "max": 1,
+   "default": 0,
+   "value": 0,
+   "repeat": 0,
+   "keyCount": 0,
+   "keyValues": []
+  },
+  {
+   "index": 14,
+   "id": "ParamBrowLAngle",
+   "type": 0,
+   "min": -1,
+   "max": 1,
+   "default": 0,
+   "value": 0,
+   "repeat": 0,
+   "keyCount": 0,
+   "keyValues": []
+  },
+  {
+   "index": 15,
+   "id": "ParamBrowRY",
+   "type": 0,
+   "min": -1,
+   "max": 1,
+   "default": 0,
+   "value": 0,
+   "repeat": 0,
+   "keyCount": 3,
+   "keyValues": [
+    -1,
+    0,
+    1
+   ]
+  },
+  {
+   "index": 16,
+   "id": "ParamBrowRForm",
+   "type": 0,
+   "min": -1,
+   "max": 1,
+   "default": 0,
+   "value": 0,
+   "repeat": 0,
+   "keyCount": 5,
+   "keyValues": [
+    -1,
+    -0.699999988079071,
+    0,
+    0.699999988079071,
+    1
+   ]
+  },
+  {
+   "index": 17,
+   "id": "ParamMouthForm",
+   "type": 0,
+   "min": -1,
+   "max": 1,
+   "default": 0,
+   "value": 0,
+   "repeat": 0,
+   "keyCount": 3,
+   "keyValues": [
+    -1,
+    0,
+    1
+   ]
+  },
+  {
+   "index": 18,
+   "id": "ParamMouthOpenY",
+   "type": 0,
+   "min": 0,
+   "max": 1,
+   "default": 0,
+   "value": 0,
+   "repeat": 0,
+   "keyCount": 4,
+   "keyValues": [
+    0,
+    0.30000001192092896,
+    0.699999988079071,
+    1
+   ]
+  },
+  {
+   "index": 19,
+   "id": "ParamCheek",
+   "type": 0,
+   "min": 0,
+   "max": 1,
+   "default": 0,
+   "value": 0,
+   "repeat": 0,
+   "keyCount": 0,
+   "keyValues": []
+  },
+  {
+   "index": 20,
+   "id": "ParamBodyAngleX",
+   "type": 0,
+   "min": -10,
+   "max": 10,
+   "default": 0,
+   "value": 0,
+   "repeat": 0,
+   "keyCount": 0,
+   "keyValues": []
+  },
+  {
+   "index": 21,
+   "id": "ParamBodyAngleY",
+   "type": 0,
+   "min": -10,
+   "max": 10,
+   "default": 0,
+   "value": 0,
+   "repeat": 0,
+   "keyCount": 0,
+   "keyValues": []
+  },
+  {
+   "index": 22,
+   "id": "ParamBodyAngleZ",
+   "type": 0,
+   "min": -10,
+   "max": 10,
+   "default": 0,
+   "value": 0,
+   "repeat": 0,
+   "keyCount": 0,
+   "keyValues": []
+  },
+  {
+   "index": 23,
+   "id": "ParamBreath",
+   "type": 0,
+   "min": 0,
+   "max": 1,
+   "default": 0,
+   "value": 0,
+   "repeat": 0,
+   "keyCount": 2,
+   "keyValues": [
+    0,
+    1
+   ]
+  },
+  {
+   "index": 24,
+   "id": "ParamHairFront",
+   "type": 0,
+   "min": -1,
+   "max": 1,
+   "default": 0,
+   "value": 0,
+   "repeat": 0,
+   "keyCount": 3,
+   "keyValues": [
+    -1,
+    0,
+    1
+   ]
+  },
+  {
+   "index": 25,
+   "id": "ParamHairSide",
+   "type": 0,
+   "min": -1,
+   "max": 1,
+   "default": 0,
+   "value": 0,
+   "repeat": 0,
+   "keyCount": 3,
+   "keyValues": [
+    -1,
+    0,
+    1
+   ]
+  },
+  {
+   "index": 26,
+   "id": "ParamHairBack",
+   "type": 0,
+   "min": -1,
+   "max": 1,
+   "default": 0,
+   "value": 0,
+   "repeat": 0,
+   "keyCount": 3,
+   "keyValues": [
+    -1,
+    0,
+    1
+   ]
+  }
+ ],
+ "partCount": 15,
+ "parts": [
+  {
+   "index": 0,
+   "id": "Part",
+   "parent": -1,
+   "offscreen": -1,
+   "opacity": 1
+  },
+  {
+   "index": 1,
+   "id": "Part6",
+   "parent": -1,
+   "offscreen": -1,
+   "opacity": 1
+  },
+  {
+   "index": 2,
+   "id": "Part7",
+   "parent": -1,
+   "offscreen": -1,
+   "opacity": 1
+  },
+  {
+   "index": 3,
+   "id": "Part16",
+   "parent": -1,
+   "offscreen": -1,
+   "opacity": 1
+  },
+  {
+   "index": 4,
+   "id": "Part11",
+   "parent": -1,
+   "offscreen": -1,
+   "opacity": 1
+  },
+  {
+   "index": 5,
+   "id": "Part9",
+   "parent": -1,
+   "offscreen": -1,
+   "opacity": 1
+  },
+  {
+   "index": 6,
+   "id": "Part13",
+   "parent": -1,
+   "offscreen": -1,
+   "opacity": 1
+  },
+  {
+   "index": 7,
+   "id": "Part2",
+   "parent": -1,
+   "offscreen": -1,
+   "opacity": 1
+  },
+  {
+   "index": 8,
+   "id": "Part3",
+   "parent": -1,
+   "offscreen": -1,
+   "opacity": 1
+  },
+  {
+   "index": 9,
+   "id": "Part4",
+   "parent": -1,
+   "offscreen": -1,
+   "opacity": 1
+  },
+  {
+   "index": 10,
+   "id": "Part5",
+   "parent": -1,
+   "offscreen": -1,
+   "opacity": 1
+  },
+  {
+   "index": 11,
+   "id": "Part14",
+   "parent": -1,
+   "offscreen": -1,
+   "opacity": 1
+  },
+  {
+   "index": 12,
+   "id": "Part15",
+   "parent": -1,
+   "offscreen": -1,
+   "opacity": 1
+  },
+  {
+   "index": 13,
+   "id": "Part12",
+   "parent": 4,
+   "offscreen": -1,
+   "opacity": 1
+  },
+  {
+   "index": 14,
+   "id": "Part10",
+   "parent": 5,
+   "offscreen": -1,
+   "opacity": 1
+  }
+ ],
+ "drawableCount": 49,
+ "drawableParentParts": [
+  0,
+  0,
+  0,
+  0,
+  0,
+  0,
+  0,
+  0,
+  0,
+  0,
+  7,
+  9,
+  10,
+  1,
+  1,
+  2,
+  6,
+  11,
+  12,
+  14,
+  14,
+  14,
+  14,
+  14,
+  5,
+  5,
+  4,
+  4,
+  13,
+  13,
+  13,
+  13,
+  13,
+  3,
+  3,
+  3,
+  3,
+  3,
+  3,
+  3,
+  8,
+  8,
+  0,
+  4,
+  4,
+  13,
+  14,
+  5,
+  5
+ ],
+ "offscreenCount": 0,
+ "renderOrdersLength": 49,
+ "isBlendModeEnabled": false,
+ "isUsingMasking": true,
+ "partsHierarchy": [
+  {
+   "part": 0,
+   "objects": [
+    [
+     "Drawable",
+     0
+    ],
+    [
+     "Drawable",
+     1
+    ],
+    [
+     "Drawable",
+     2
+    ],
+    [
+     "Drawable",
+     3
+    ],
+    [
+     "Drawable",
+     4
+    ],
+    [
+     "Drawable",
+     5
+    ],
+    [
+     "Drawable",
+     6
+    ],
+    [
+     "Drawable",
+     7
+    ],
+    [
+     "Drawable",
+     8
+    ],
+    [
+     "Drawable",
+     9
+    ],
+    [
+     "Drawable",
+     42
+    ]
+   ],
+   "childDrawables": [
+    0,
+    1,
+    2,
+    3,
+    4,
+    5,
+    6,
+    7,
+    8,
+    9,
+    42
+   ]
+  },
+  {
+   "part": 1,
+   "objects": [
+    [
+     "Drawable",
+     13
+    ],
+    [
+     "Drawable",
+     14
+    ]
+   ],
+   "childDrawables": [
+    13,
+    14
+   ]
+  },
+  {
+   "part": 2,
+   "objects": [
+    [
+     "Drawable",
+     15
+    ]
+   ],
+   "childDrawables": [
+    15
+   ]
+  },
+  {
+   "part": 3,
+   "objects": [
+    [
+     "Drawable",
+     33
+    ],
+    [
+     "Drawable",
+     34
+    ],
+    [
+     "Drawable",
+     35
+    ],
+    [
+     "Drawable",
+     36
+    ],
+    [
+     "Drawable",
+     37
+    ],
+    [
+     "Drawable",
+     38
+    ],
+    [
+     "Drawable",
+     39
+    ]
+   ],
+   "childDrawables": [
+    33,
+    34,
+    35,
+    36,
+    37,
+    38,
+    39
+   ]
+  },
+  {
+   "part": 4,
+   "objects": [
+    [
+     "Part",
+     13
+    ],
+    [
+     "Drawable",
+     26
+    ],
+    [
+     "Drawable",
+     27
+    ],
+    [
+     "Drawable",
+     43
+    ],
+    [
+     "Drawable",
+     44
+    ]
+   ],
+   "childDrawables": [
+    28,
+    29,
+    30,
+    31,
+    32,
+    45,
+    26,
+    27,
+    43,
+    44
+   ]
+  },
+  {
+   "part": 5,
+   "objects": [
+    [
+     "Part",
+     14
+    ],
+    [
+     "Drawable",
+     24
+    ],
+    [
+     "Drawable",
+     25
+    ],
+    [
+     "Drawable",
+     47
+    ],
+    [
+     "Drawable",
+     48
+    ]
+   ],
+   "childDrawables": [
+    19,
+    20,
+    21,
+    22,
+    23,
+    46,
+    24,
+    25,
+    47,
+    48
+   ]
+  },
+  {
+   "part": 6,
+   "objects": [
+    [
+     "Drawable",
+     16
+    ]
+   ],
+   "childDrawables": [
+    16
+   ]
+  },
+  {
+   "part": 7,
+   "objects": [
+    [
+     "Drawable",
+     10
+    ]
+   ],
+   "childDrawables": [
+    10
+   ]
+  },
+  {
+   "part": 8,
+   "objects": [
+    [
+     "Drawable",
+     40
+    ],
+    [
+     "Drawable",
+     41
+    ]
+   ],
+   "childDrawables": [
+    40,
+    41
+   ]
+  },
+  {
+   "part": 9,
+   "objects": [
+    [
+     "Drawable",
+     11
+    ]
+   ],
+   "childDrawables": [
+    11
+   ]
+  },
+  {
+   "part": 10,
+   "objects": [
+    [
+     "Drawable",
+     12
+    ]
+   ],
+   "childDrawables": [
+    12
+   ]
+  },
+  {
+   "part": 11,
+   "objects": [
+    [
+     "Drawable",
+     17
+    ]
+   ],
+   "childDrawables": [
+    17
+   ]
+  },
+  {
+   "part": 12,
+   "objects": [
+    [
+     "Drawable",
+     18
+    ]
+   ],
+   "childDrawables": [
+    18
+   ]
+  },
+  {
+   "part": 13,
+   "objects": [
+    [
+     "Drawable",
+     28
+    ],
+    [
+     "Drawable",
+     29
+    ],
+    [
+     "Drawable",
+     30
+    ],
+    [
+     "Drawable",
+     31
+    ],
+    [
+     "Drawable",
+     32
+    ],
+    [
+     "Drawable",
+     45
+    ]
+   ],
+   "childDrawables": [
+    28,
+    29,
+    30,
+    31,
+    32,
+    45
+   ]
+  },
+  {
+   "part": 14,
+   "objects": [
+    [
+     "Drawable",
+     19
+    ],
+    [
+     "Drawable",
+     20
+    ],
+    [
+     "Drawable",
+     21
+    ],
+    [
+     "Drawable",
+     22
+    ],
+    [
+     "Drawable",
+     23
+    ],
+    [
+     "Drawable",
+     46
+    ]
+   ],
+   "childDrawables": [
+    19,
+    20,
+    21,
+    22,
+    23,
+    46
+   ]
+  }
+ ],
+ "isRepeatDefault": [
+  false,
+  false,
+  false,
+  false,
+  false,
+  false,
+  false,
+  false,
+  false,
+  false,
+  false,
+  false,
+  false,
+  false,
+  false,
+  false,
+  false,
+  false,
+  false,
+  false,
+  false,
+  false,
+  false,
+  false,
+  false,
+  false,
+  false
+ ],
+ "modelSetting": {
+  "getModelFileName": "Live2D紅莉栖forSDK5.0.moc3",
+  "getTextureCount": 1,
+  "getTextureDirectory": "Live2D紅莉栖forSDK5.0.8192",
+  "getTextureFileName0": "Live2D紅莉栖forSDK5.0.8192/texture_00.png",
+  "getPhysicsFileName": "Live2D紅莉栖forSDK5.0.physics3.json",
+  "getPoseFileName": "",
+  "getExpressionCount": 0,
+  "getMotionGroupCount": 0,
+  "getMotionCount_Idle": 0,
+  "getEyeBlinkParameterCount": 0,
+  "getLipSyncParameterCount": 0,
+  "getHitAreasCount": 0,
+  "getUserDataFile": "",
+  "getLayoutMap": {
+   "ret": false,
+   "size": 0
+  },
+  "getMotionFadeInTimeValue_Idle0": -1,
+  "getMotionFileName_Idle0": ""
+ }
+}

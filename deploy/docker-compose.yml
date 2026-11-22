@@ -1,0 +1,45 @@
+# RealAmadeus V2 — Web version with Docker Compose.
+#
+#   cp .env.example .env          # fill in AI_STUDIO_API_KEY (FreeAPI) if you use it
+#   docker compose up -d
+#   curl -fsS http://127.0.0.1:9502/amadeus/healthz   # -> ok
+#
+# Then point your reverse proxy at 127.0.0.1:9502 (see nginx.conf / Caddyfile / README.md).
+# The image is published by the release workflow; to build it yourself instead, comment out
+# `image:` and uncomment `build:` (the context is the repository root).
+
+services:
+  amadeus:
+    image: ghcr.io/dsuv-sg/realamadeus-web:latest
+    # build:
+    #   context: ..
+    #   args:
+    #     AMADEUS_BASE_PATH: /amadeus/
+    container_name: realamadeus-web
+    restart: unless-stopped
+    ports:
+      # Only reachable from this host; the reverse proxy publishes it.
+      - "127.0.0.1:9502:9502"
+    env_file:
+      - .env
+    environment:
+      # AMADEUS_BIND (0.0.0.0:9502), AMADEUS_DIST_DIR (/app/dist) and AMADEUS_DATA_DIR (/data)
+      # are set by the image. The base path must match the one the image was built for.
+      AMADEUS_BASE_PATH: /amadeus
+      # TTS / STT / RAG: the target URL comes from each request (the server URL set in the
+      # app), and the server forwards to it. Inside the container `localhost` is the container
+      # itself, so users of services on the Docker host enter http://host.docker.internal:5100
+      # (5101 / 5102) in the app settings. Restrict the targets (unset = any URL, like V1):
+      # AMADEUS_PROXY_ALLOWLIST: host.docker.internal:5100,host.docker.internal:5101,host.docker.internal:5102
+      # FreeAPI (Vertex): mount the service-account JSON (see volumes) and enable this line.
+      # AMADEUS_VERTEX_CREDENTIALS: /run/secrets/vertex-service-account.json
+      # Global FreeAPI request cap (default 65000, V1's value; a positive integer):
+      # AMADEUS_FREEAPI_MAX: "100000"
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+    volumes:
+      - amadeus-data:/data
+      # - ./vertex-service-account.json:/run/secrets/vertex-service-account.json:ro
+
+volumes:
+  amadeus-data:

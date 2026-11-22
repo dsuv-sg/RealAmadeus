@@ -1,0 +1,39 @@
+[package]
+name = "amadeus-backend"
+description = "Native backend of RealAmadeus V2: LLM providers, streaming, Vertex/FreeAPI, TTS/STT/RAG proxies. Shared by the web server and the desktop app."
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+authors.workspace = true
+repository.workspace = true
+
+[dependencies]
+amadeus-core.workspace = true
+serde.workspace = true
+# preserve_order: V1 (JS objects) keeps JSON key insertion order (health spread, pass-through bodies).
+# float_roundtrip: correctly rounded float parsing, like JS JSON.parse.
+serde_json = { workspace = true, features = ["preserve_order", "float_roundtrip"] }
+thiserror.workspace = true
+anyhow.workspace = true
+base64.workspace = true
+tokio.workspace = true
+# deflate + brotli: undici decompresses every upstream encoding (aux proxies forward the body).
+reqwest = { workspace = true, features = ["deflate", "brotli"] }
+futures.workspace = true
+futures-util.workspace = true
+bytes.workspace = true
+jsonwebtoken.workspace = true
+tracing.workspace = true
+chrono.workspace = true
+url.workspace = true
+# aux: HTTP/1 reason phrase (`hyper::ext::ReasonPhrase`, already enabled by reqwest).
+hyper = { version = "1.12", default-features = false, features = ["http1"] }
+
+[dev-dependencies]
+tokio = { workspace = true, features = ["test-util"] }
+# chat: local mock upstream servers for end-to-end tests.
+axum.workspace = true
+# chat: throwaway RSA key generated at test time to verify the Vertex service-account JWT.
+rsa = "0.10.0"
+getrandom = { version = "0.4.3", features = ["sys_rng"] }

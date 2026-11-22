@@ -1,0 +1,76 @@
+# RealAmadeus V2 — amadeus-server (Web version) as a systemd service.
+#
+# Install (see deploy/README.md for the full walkthrough):
+#   sudo useradd --system --home-dir /opt/realamadeus --shell /usr/sbin/nologin amadeus
+#   sudo mkdir -p /opt/realamadeus /etc/realamadeus
+#   sudo tar -xzf RealAmadeus_V2.x.yR_Web_Linux-x64.tar.gz --strip-components=1 -C /opt/realamadeus
+#   sudo install -m 0640 -o root -g amadeus /opt/realamadeus/.env.example /etc/realamadeus/amadeus.env
+#   sudo cp /opt/realamadeus/deploy/amadeus-server.service /etc/systemd/system/
+#   sudo systemctl daemon-reload && sudo systemctl enable --now amadeus-server
+#   journalctl -u amadeus-server -f
+
+[Unit]
+Description=RealAmadeus V2 web server (amadeus-server)
+Documentation=https://github.com/dsuv-sg/RealAmadeus
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=amadeus
+Group=amadeus
+WorkingDirectory=/opt/realamadeus
+ExecStart=/opt/realamadeus/amadeus-server
+
+# Secrets and overrides (AI_STUDIO_API_KEY, AMADEUS_* — see .env.example). The leading "-"
+# makes the file optional. Keep it root:amadeus 0640.
+EnvironmentFile=-/etc/realamadeus/amadeus.env
+
+# Defaults for this layout. Values in the EnvironmentFile above override them.
+Environment=AMADEUS_BIND=127.0.0.1:9502
+Environment=AMADEUS_BASE_PATH=/amadeus
+Environment=AMADEUS_DIST_DIR=/opt/realamadeus/dist
+Environment=AMADEUS_DATA_DIR=/var/lib/realamadeus
+Environment=RUST_LOG=info
+# Google service-account JSON for FreeAPI (Vertex). Keep it root:amadeus 0640.
+#Environment=AMADEUS_VERTEX_CREDENTIALS=/etc/realamadeus/vertex-service-account.json
+
+# /var/lib/realamadeus, owned by User=, created on start (chat log, counters, rate limits).
+StateDirectory=realamadeus
+StateDirectoryMode=0750
+
+Restart=on-failure
+RestartSec=3
+TimeoutStopSec=20
+LimitNOFILE=65536
+
+# --- Hardening (`systemd-analyze security amadeus-server` should report "OK"/low exposure) --
+NoNewPrivileges=yes
+CapabilityBoundingSet=
+AmbientCapabilities=
+ProtectSystem=strict
+ProtectHome=yes
+PrivateTmp=yes
+PrivateDevices=yes
+ProtectKernelTunables=yes
+ProtectKernelModules=yes
+ProtectKernelLogs=yes
+ProtectControlGroups=yes
+ProtectClock=yes
+ProtectHostname=yes
+ProtectProc=invisible
+ProcSubset=pid
+RestrictAddressFamilies=AF_INET AF_INET6 AF_UNIX
+RestrictNamespaces=yes
+RestrictRealtime=yes
+RestrictSUIDSGID=yes
+LockPersonality=yes
+MemoryDenyWriteExecute=yes
+RemoveIPC=yes
+SystemCallArchitectures=native
+SystemCallFilter=@system-service
+SystemCallFilter=~@privileged @resources
+UMask=0027
+
+[Install]
+WantedBy=multi-user.target

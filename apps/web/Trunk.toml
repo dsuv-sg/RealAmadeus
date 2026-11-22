@@ -1,0 +1,39 @@
+# Trunk configuration for the RealAmadeus V2 frontend.
+#
+#   Web build      : trunk build --release                     (public_url /amadeus/)
+#   Desktop build  : trunk build --release --public-url / --dist dist-desktop
+#   Dev (web)      : trunk serve   (proxies /amadeus/app/api/ to amadeus-server on :9502)
+#
+# The web server's AMADEUS_BASE_PATH must match public_url.
+
+[build]
+target = "index.html"
+dist = "dist"
+public_url = "/amadeus/"
+filehash = true
+# Trunk defaults to never minifying; V1 shipped minified CSS.
+minify = "on_release"
+
+[watch]
+watch = [
+  "index.html",
+  "style",
+  "src",
+  "../../crates/amadeus-ui/src",
+  "../../crates/amadeus-core/src",
+  "../../crates/amadeus-core/locales",
+  "../../crates/amadeus-live2d/src",
+  "../../crates/amadeus-live2d/shaders",
+]
+
+[serve]
+addresses = ["127.0.0.1"]
+port = 8080
+open = false
+
+[tools]
+# Same Tailwind major/minor as V1 (tailwindcss 4.1.18) for identical utility output.
+tailwindcss = "4.1.18"
+
+[[proxy]]
+backend = "http://127.0.0.1:9502/amadeus/app/api/"

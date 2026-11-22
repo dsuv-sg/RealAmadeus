@@ -1,0 +1,21 @@
+[Desktop Entry]{{!--
+  Desktop entry of the deb, rpm and AppImage bundles (bundle.linux.deb/rpm.desktopTemplate in
+  tauri.conf.json). This is tauri-bundler's default template (src/bundle/linux/freedesktop/
+  main.desktop) except for the Categories line: the bundler maps bundle.category "Entertainment"
+  (kept for macOS, public.app-category.entertainment) to "Network;", which lists the app under
+  Internet. Game;Amusement; is the freedesktop way to say entertainment and matches the deb
+  section "games".
+--}}
+Categories=Game;Amusement;
+{{#if comment}}
+Comment={{comment}}
+{{/if}}
+Exec={{exec}}
+StartupWMClass={{exec}}
+Icon={{icon}}
+Name={{name}}
+Terminal=false
+Type=Application
+{{#if mime_type}}
+MimeType={{mime_type}}
+{{/if}}

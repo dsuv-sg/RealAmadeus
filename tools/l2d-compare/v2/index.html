@@ -1,0 +1,27 @@
+<!doctype html>
+<!--
+  l2d-compare V2 page: tools/live2d-viewer (amadeus-live2d) built by Trunk from THIS index variant, which only
+  differs from tools/live2d-viewer/index.html by the deterministic shim placed before everything else (the
+  wasm bootstrap Trunk injects is a module script and therefore always runs after it).
+    cd tools/l2d-compare/v2 && trunk build --release --public-url /v2/ --dist <dir> index.html
+  Query: emotion=<tag>, resources=<prefix>, lip, char, eyeX, eyeY (the viewer's own parameters, see
+  tools/live2d-viewer/src/main.rs), plus the shim's frames/seed/timeout/readback/stepms/do (see /shim.js).
+-->
+<html>
+  <head>
+    <meta charset="utf-8" />
+    <script src="/shim.js"></script>
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <link rel="icon" href="data:," />
+    <base data-trunk-public-url />
+    <title>l2d-compare V2</title>
+    <style>
+      html, body { margin: 0; padding: 0; background: #000; width: 100%; height: 100%; overflow: hidden; }
+      #host { position: fixed; inset: 0; }
+    </style>
+    <link data-trunk rel="rust" href="../../live2d-viewer/Cargo.toml" data-bin="live2d-viewer" data-wasm-opt="0" />
+  </head>
+  <body>
+    <div id="host" class="live2d-host"></div>
+  </body>
+</html>

@@ -1,0 +1,567 @@
+# Release pipeline for RealAmadeus V2 (Rust).
+#
+#   cargo xtask bump 2.0.1 --commit --tag && git push --follow-tags
+#
+# A pushed tag v2.x.y (or a manual run for an existing tag) creates a draft GitHub release
+# "RealAmadeus V2.x.y" (e.g. "RealAmadeus V2.0") with the CHANGELOG section as its body, then builds in parallel:
+#   desktop  Windows (NSIS + MSI), macOS (universal .dmg), Linux (AppImage, .deb, .rpm)
+#            [+ Linux arm64 when the repository variable RELEASE_LINUX_ARM64 is "true"]
+#   web      RealAmadeus_<label>_Web_Linux-x64.tar.gz (+ .sha256)
+#   docker   ghcr.io/<owner>/realamadeus-web:<ver>
+# and finally publishes the release (unless a draft was requested). Only then, and only for the
+# newest stable version, do GitHub's "latest" release and the :latest image move to it.
+#
+# Linux artifacts are built on Ubuntu 22.04 (glibc 2.35). GitHub removes the ubuntu-22.04 and
+# ubuntu-22.04-arm runners on 2027-04-17, with brownouts (jobs fail on purpose) on 2027-03-23,
+# 03-30, 04-06 and 04-13 (actions/runner-images#14254): migrate before then, see docs/RELEASE.md §5.
+#
+# Optional secrets (everything works without them, unsigned):
+#   TAURI_SIGNING_PRIVATE_KEY, TAURI_SIGNING_PRIVATE_KEY_PASSWORD   desktop auto-update
+#   APPLE_CERTIFICATE, APPLE_CERTIFICATE_PASSWORD, APPLE_SIGNING_IDENTITY,
+#   APPLE_ID, APPLE_PASSWORD, APPLE_TEAM_ID                         macOS signing/notarization
+#   WINDOWS_CERTIFICATE, WINDOWS_CERTIFICATE_PASSWORD               Windows Authenticode
+# Optional repository variables: TAURI_UPDATER_PUBKEY, RELEASE_LINUX_ARM64,
+# WINDOWS_TIMESTAMP_URL. See docs/RELEASE.md.
+#
+# NOTE: assumes RealAmadeusRust/ is the repository root (see the note in ci.yml otherwise).
+
+name: Release
+
+on:
+  push:
+    tags: ["v2.*"]
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: "Existing tag to build and release, e.g. v2.0.1"
+        required: true
+        type: string
+      draft:
+        description: "Do not publish: a new release stays a draft (an already published one stays published)"
+        type: boolean
+        default: false
+
+permissions: {}
+
+concurrency:
+  group: release-${{ inputs.tag || github.ref_name }}
+  cancel-in-progress: false
+
+env:
+  CARGO_TERM_COLOR: always
+  CARGO_INCREMENTAL: "0"
+  RUST_BACKTRACE: short
+  TRUNK_VERSION: "0.22.1"
+  TAURI_CLI_VERSION: "2.12.4"
+  RELEASE_TAG: ${{ inputs.tag || github.ref_name }}
+  IMAGE_NAME: realamadeus-web
+
+defaults:
+  run:
+    shell: bash
+
+jobs:
+  prepare:
+    name: Create draft release
+    runs-on: ubuntu-24.04
+    permissions:
+      contents: write
+    outputs:
+      version: ${{ steps.meta.outputs.version }}
+      label: ${{ steps.meta.outputs.label }}
+      prerelease: ${{ steps.meta.outputs.prerelease }}
+      msi_compatible: ${{ steps.meta.outputs.msi_compatible }}
+      release_id: ${{ steps.release.outputs.id }}
+      desktop_matrix: ${{ steps.matrices.outputs.desktop }}
+      web_matrix: ${{ steps.matrices.outputs.web }}
+    steps:
+      - name: Validate the tag
+        run: |
+          if [[ ! "$RELEASE_TAG" =~ ^v[0-9]+\.[0-9]+\.[0-9]+(-[0-9A-Za-z.-]+)?$ ]]; then
+            echo "::error::'$RELEASE_TAG' is not a release tag such as v2.0.1 or v2.1.0-rc.1"
+            exit 1
+          fi
+
+      - uses: actions/checkout@v7
+        with:
+          ref: ${{ env.RELEASE_TAG }}
+
+      - uses: dtolnay/rust-toolchain@stable
+
+      - uses: Swatinem/rust-cache@v2
+        with:
+          key: release-prepare
+
+      - name: Read the version
+        id: meta
+        run: |
+          meta="$(cargo xtask version --json)"
+          echo "$meta"
+          version="$(jq -r .version <<<"$meta")"
+          if [ "v$version" != "$RELEASE_TAG" ]; then
+            echo "::error::Tag $RELEASE_TAG does not match the workspace version $version in Cargo.toml. Create tags with 'cargo xtask bump <version> --commit --tag'."
+            exit 1
+          fi
+          {
+            echo "version=$version"
+            echo "label=$(jq -r .label <<<"$meta")"
+            echo "prerelease=$(jq -r .prerelease <<<"$meta")"
+            # WiX only accepts numeric pre-releases (2.1.0-1, not 2.1.0-rc.1).
+            echo "msi_compatible=$(jq -r .msi_compatible <<<"$meta")"
+          } >> "$GITHUB_OUTPUT"
+
+      - name: Release notes from CHANGELOG.md
+        env:
+          VERSION: ${{ steps.meta.outputs.version }}
+        run: cargo xtask release-notes "$VERSION" --download-guide > "$RUNNER_TEMP/notes.md"
+
+      - name: Create or update the draft release
+        id: release
+        env:
+          GH_TOKEN: ${{ github.token }}
+          LABEL: ${{ steps.meta.outputs.label }}
+          PRERELEASE: ${{ steps.meta.outputs.prerelease }}
+        run: |
+          title="RealAmadeus ${LABEL}"
+          # Drafts are only visible through the list endpoint, not /releases/tags/{tag}.
+          id="$(gh api --paginate "repos/$GITHUB_REPOSITORY/releases?per_page=100" \
+                --jq ".[] | select(.tag_name == \"$RELEASE_TAG\") | .id" | head -n 1)"
+          if [ -n "$id" ]; then
+            echo "Re-run: updating release $id (assets are replaced by the build jobs)"
+            gh api -X PATCH "repos/$GITHUB_REPOSITORY/releases/$id" \
+              -f name="$title" -F body=@"$RUNNER_TEMP/notes.md" -F prerelease="$PRERELEASE" --silent
+          else
+            id="$(gh api -X POST "repos/$GITHUB_REPOSITORY/releases" \
+              -f tag_name="$RELEASE_TAG" -f name="$title" -F body=@"$RUNNER_TEMP/notes.md" \
+              -F draft=true -F prerelease="$PRERELEASE" --jq .id)"
+            echo "Created draft release $id"
+          fi
+          echo "id=$id" >> "$GITHUB_OUTPUT"
+
+      - name: Build matrices
+        id: matrices
+        env:
+          LINUX_ARM64: ${{ vars.RELEASE_LINUX_ARM64 }}
+          MSI_COMPATIBLE: ${{ steps.meta.outputs.msi_compatible }}
+        run: |
+          windows_bundles=nsis,msi
+          windows_keys="windows-x86_64 windows-x86_64-nsis windows-x86_64-msi"
+          if [ "$MSI_COMPATIBLE" != "true" ]; then
+            windows_bundles=nsis
+            windows_keys="windows-x86_64 windows-x86_64-nsis"
+            echo "::notice::This version cannot be expressed as an MSI version: Windows gets the NSIS installer only."
+          fi
+          # updater_keys: the latest.json platforms each leg writes when auto-update is enabled
+          # (checked by the publish job): tauri-action writes "{os}-{arch}" plus one
+          # "{os}-{arch}-{bundle}" entry per signed bundle, and the updater plugin prefers the
+          # installer-specific entry (a .deb install must get the .deb, not the AppImage). Linux legs run on Ubuntu 22.04 for the glibc 2.35
+          # baseline (Ubuntu 22.04+, Debian 12+); that image is removed on 2027-04-17, see the
+          # header of this file.
+          desktop='[
+            {"id": "windows-x64", "name": "Windows x64", "runner": "windows-latest", "platform": "Windows",
+             "targets": "wasm32-unknown-unknown", "args": "--bundles '"$windows_bundles"'",
+             "updater_keys": "'"$windows_keys"'"},
+            {"id": "macos-universal", "name": "macOS universal", "runner": "macos-latest", "platform": "macOS",
+             "targets": "wasm32-unknown-unknown,aarch64-apple-darwin,x86_64-apple-darwin",
+             "args": "--target universal-apple-darwin --bundles app,dmg",
+             "updater_keys": "darwin-x86_64 darwin-aarch64 darwin-x86_64-app darwin-aarch64-app"},
+            {"id": "linux-x64", "name": "Linux x64", "runner": "ubuntu-22.04", "platform": "Linux",
+             "targets": "wasm32-unknown-unknown", "args": "--bundles appimage,deb,rpm",
+             "updater_keys": "linux-x86_64 linux-x86_64-appimage linux-x86_64-deb linux-x86_64-rpm"}
+          ]'
+          web='[{"id": "linux-x64", "name": "Linux x64", "runner": "ubuntu-22.04"}]'
+          # GitHub-hosted arm64 Linux runners (free for public repositories).
+          if [ "$LINUX_ARM64" = "true" ]; then
+            desktop="$(jq '. + [{"id": "linux-arm64", "name": "Linux arm64", "runner": "ubuntu-22.04-arm",
+              "platform": "Linux", "targets": "wasm32-unknown-unknown", "args": "--bundles appimage,deb,rpm",
+              "updater_keys": "linux-aarch64 linux-aarch64-appimage linux-aarch64-deb linux-aarch64-rpm"}]' <<<"$desktop")"
+            web="$(jq '. + [{"id": "linux-arm64", "name": "Linux arm64", "runner": "ubuntu-22.04-arm"}]' <<<"$web")"
+          fi
+          echo "desktop=$(jq -c '{include: .}' <<<"$desktop")" >> "$GITHUB_OUTPUT"
+          echo "web=$(jq -c '{include: .}' <<<"$web")" >> "$GITHUB_OUTPUT"
+
+  desktop:
+    name: Desktop (${{ matrix.name }})
+    needs: prepare
+    runs-on: ${{ matrix.runner }}
+    permissions:
+      contents: write
+    strategy:
+      fail-fast: false
+      matrix: ${{ fromJSON(needs.prepare.outputs.desktop_matrix) }}
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          ref: ${{ env.RELEASE_TAG }}
+
+      - name: Install Linux dependencies
+        if: runner.os == 'Linux'
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends \
+            libwebkit2gtk-4.1-dev libappindicator3-dev librsvg2-dev patchelf \
+            libsoup-3.0-dev libjavascriptcoregtk-4.1-dev \
+            xdg-utils file gstreamer1.0-plugins-base gstreamer1.0-plugins-good
+
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: ${{ matrix.targets }}
+
+      - uses: Swatinem/rust-cache@v2
+        with:
+          key: release-${{ matrix.id }}
+
+      - uses: taiki-e/install-action@v2
+        with:
+          tool: trunk@${{ env.TRUNK_VERSION }}
+
+      - name: Install the Tauri CLI
+        run: npm install --global "@tauri-apps/cli@${TAURI_CLI_VERSION}"
+
+      # Only secrets that are actually set are exported: Tauri treats an empty
+      # APPLE_CERTIFICATE / TAURI_SIGNING_PRIVATE_KEY as "configured" and would fail.
+      - name: Configure optional signing secrets
+        env:
+          APPLE_CERTIFICATE: ${{ secrets.APPLE_CERTIFICATE }}
+          APPLE_CERTIFICATE_PASSWORD: ${{ secrets.APPLE_CERTIFICATE_PASSWORD }}
+          APPLE_SIGNING_IDENTITY: ${{ secrets.APPLE_SIGNING_IDENTITY }}
+          APPLE_ID: ${{ secrets.APPLE_ID }}
+          APPLE_PASSWORD: ${{ secrets.APPLE_PASSWORD }}
+          APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
+          TAURI_SIGNING_PRIVATE_KEY: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}
+          TAURI_SIGNING_PRIVATE_KEY_PASSWORD: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY_PASSWORD }}
+        run: |
+          export_env() {
+            local name="$1"
+            {
+              echo "$name<<__REALAMADEUS_ENV__"
+              printf '%s\n' "${!name}"
+              echo "__REALAMADEUS_ENV__"
+            } >> "$GITHUB_ENV"
+          }
+          if [ "$RUNNER_OS" = "macOS" ]; then
+            if [ -n "$APPLE_CERTIFICATE" ] && [ -z "$APPLE_SIGNING_IDENTITY" ]; then
+              echo "::error::APPLE_CERTIFICATE is set but APPLE_SIGNING_IDENTITY is not (e.g. 'Developer ID Application: Your Name (TEAMID)')."
+              exit 1
+            fi
+            for name in APPLE_CERTIFICATE APPLE_CERTIFICATE_PASSWORD APPLE_SIGNING_IDENTITY APPLE_ID APPLE_PASSWORD APPLE_TEAM_ID; do
+              if [ -n "${!name}" ]; then export_env "$name"; echo "$name: configured"; fi
+            done
+            if [ -z "$APPLE_SIGNING_IDENTITY" ]; then
+              echo "::notice::macOS: no Developer ID configured, the app is ad-hoc signed (users confirm the first launch)."
+            fi
+          fi
+          if [ -n "$TAURI_SIGNING_PRIVATE_KEY" ]; then
+            export_env TAURI_SIGNING_PRIVATE_KEY
+            # May be empty for a key without password; Tauri still reads the variable.
+            export_env TAURI_SIGNING_PRIVATE_KEY_PASSWORD
+            echo "Updater signing key: configured"
+          else
+            echo "::notice::TAURI_SIGNING_PRIVATE_KEY is not set: building without the auto-updater."
+          fi
+
+      - name: Import the Windows code-signing certificate
+        id: wincert
+        if: runner.os == 'Windows'
+        shell: pwsh
+        env:
+          WINDOWS_CERTIFICATE: ${{ secrets.WINDOWS_CERTIFICATE }}
+          WINDOWS_CERTIFICATE_PASSWORD: ${{ secrets.WINDOWS_CERTIFICATE_PASSWORD }}
+          WINDOWS_TIMESTAMP_URL: ${{ vars.WINDOWS_TIMESTAMP_URL }}
+        run: |
+          if (-not $env:WINDOWS_CERTIFICATE) {
+            Write-Output "::notice::WINDOWS_CERTIFICATE is not set: the installers are not code-signed."
+            exit 0
+          }
+          $pfx = Join-Path $env:RUNNER_TEMP 'codesign.pfx'
+          [IO.File]::WriteAllBytes($pfx, [Convert]::FromBase64String($env:WINDOWS_CERTIFICATE))
+          if ($env:WINDOWS_CERTIFICATE_PASSWORD) {
+            $password = ConvertTo-SecureString -String $env:WINDOWS_CERTIFICATE_PASSWORD -Force -AsPlainText
+          } else {
+            $password = New-Object System.Security.SecureString
+          }
+          $imported = Import-PfxCertificate -FilePath $pfx -CertStoreLocation Cert:\CurrentUser\My -Password $password
+          Remove-Item $pfx
+          $cert = $imported | Where-Object { $_.HasPrivateKey } | Select-Object -First 1
+          if (-not $cert) { throw "The PFX in WINDOWS_CERTIFICATE contains no certificate with a private key." }
+          $timestamp = if ($env:WINDOWS_TIMESTAMP_URL) { $env:WINDOWS_TIMESTAMP_URL } else { 'http://timestamp.digicert.com' }
+          $conf = @{ bundle = @{ windows = @{
+            certificateThumbprint = $cert.Thumbprint
+            digestAlgorithm       = 'sha256'
+            timestampUrl          = $timestamp
+          } } }
+          New-Item -ItemType Directory -Force -Path target/ci | Out-Null
+          $conf | ConvertTo-Json -Depth 5 | Set-Content -Path target/ci/windows-sign.conf.json -Encoding utf8NoBOM
+          Add-Content -Path $env:GITHUB_OUTPUT -Value "config=target/ci/windows-sign.conf.json"
+          Write-Output "Code signing with $($cert.Subject) ($($cert.Thumbprint))"
+
+      - name: Prepare the tauri build arguments
+        id: args
+        env:
+          MATRIX_ARGS: ${{ matrix.args }}
+          WINDOWS_SIGN_CONFIG: ${{ steps.wincert.outputs.config }}
+          TAURI_UPDATER_PUBKEY: ${{ vars.TAURI_UPDATER_PUBKEY }}
+        run: |
+          args="$MATRIX_ARGS"
+          updater=false
+          if [ -n "${TAURI_SIGNING_PRIVATE_KEY:-}" ]; then
+            mkdir -p target/ci
+            conf=target/ci/tauri.updater.conf.json
+            if [ -n "$TAURI_UPDATER_PUBKEY" ]; then
+              jq --arg key "$TAURI_UPDATER_PUBKEY" '.plugins.updater.pubkey = $key' \
+                apps/desktop/tauri.updater.conf.json > "$conf"
+            else
+              cp apps/desktop/tauri.updater.conf.json "$conf"
+            fi
+            if grep -q 'REPLACE_WITH_TAURI_UPDATER_PUBLIC_KEY' "$conf"; then
+              echo "::error::TAURI_SIGNING_PRIVATE_KEY is set but the updater public key is missing: set the repository variable TAURI_UPDATER_PUBKEY or paste the key into apps/desktop/tauri.updater.conf.json."
+              exit 1
+            fi
+            args="$args --features updater --config $conf"
+            updater=true
+          fi
+          if [ -n "$WINDOWS_SIGN_CONFIG" ]; then
+            args="$args --config $WINDOWS_SIGN_CONFIG"
+          fi
+          echo "tauri build $args"
+          echo "args=$args" >> "$GITHUB_OUTPUT"
+          echo "updater=$updater" >> "$GITHUB_OUTPUT"
+
+      # Builds with the pinned npm CLI and uploads to the draft release. The pattern gives
+      # RealAmadeus_V2.0_Windows_x64-setup.exe, ..._macOS_universal.dmg,
+      # ..._Linux_amd64.AppImage / .deb, ..._Linux_x86_64.rpm (the same names as
+      # `cargo xtask dist desktop`).
+      - name: Build and upload
+        uses: tauri-apps/tauri-action@v1
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        with:
+          tauriScript: tauri
+          args: ${{ steps.args.outputs.args }}
+          releaseId: ${{ needs.prepare.outputs.release_id }}
+          releaseAssetNamePattern: RealAmadeus_${{ needs.prepare.outputs.label }}_${{ matrix.platform }}_[arch][setup][ext]
+          releaseBody: "RealAmadeus ${{ needs.prepare.outputs.label }}: https://github.com/${{ github.repository }}/releases/tag/${{ env.RELEASE_TAG }}"
+          uploadUpdaterJson: ${{ steps.args.outputs.updater }}
+          updaterJsonPreferNsis: true
+          retryAttempts: 1
+
+  web:
+    name: Web (${{ matrix.name }})
+    needs: prepare
+    runs-on: ${{ matrix.runner }}
+    permissions:
+      contents: write
+    strategy:
+      fail-fast: false
+      matrix: ${{ fromJSON(needs.prepare.outputs.web_matrix) }}
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          ref: ${{ env.RELEASE_TAG }}
+
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: wasm32-unknown-unknown
+
+      - uses: Swatinem/rust-cache@v2
+        with:
+          key: release-web-${{ matrix.id }}
+
+      - uses: taiki-e/install-action@v2
+        with:
+          tool: trunk@${{ env.TRUNK_VERSION }}
+
+      # Built on Ubuntu 22.04 (glibc 2.35) so the binary runs on Debian 12, Ubuntu 22.04+ and newer.
+      - name: cargo xtask dist web
+        run: cargo xtask dist web
+
+      - name: Upload to the release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          shopt -s nullglob
+          files=(release/RealAmadeus_V*_Web_*)
+          if [ ${#files[@]} -eq 0 ]; then
+            echo "::error::no web package found in release/"
+            exit 1
+          fi
+          gh release upload "$RELEASE_TAG" "${files[@]}" --repo "$GITHUB_REPOSITORY" --clobber
+
+  docker:
+    name: Docker image (ghcr.io)
+    needs: prepare
+    runs-on: ubuntu-24.04
+    permissions:
+      contents: read
+      packages: write
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          ref: ${{ env.RELEASE_TAG }}
+
+      - name: Image name
+        id: image
+        run: echo "name=ghcr.io/${GITHUB_REPOSITORY_OWNER,,}/${IMAGE_NAME}" >> "$GITHUB_OUTPUT"
+
+      - uses: docker/setup-buildx-action@v4
+
+      - uses: docker/login-action@v4
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      # Only the version tag here: :latest is moved by the publish job once the release is
+      # public, so `docker compose pull` never picks up a build whose release failed or is a draft.
+      - id: meta
+        uses: docker/metadata-action@v6
+        with:
+          images: ${{ steps.image.outputs.name }}
+          flavor: latest=false
+          tags: |
+            type=raw,value=${{ needs.prepare.outputs.version }}
+          labels: |
+            org.opencontainers.image.title=RealAmadeus Web
+            org.opencontainers.image.version=${{ needs.prepare.outputs.version }}
+
+      - uses: docker/build-push-action@v7
+        with:
+          context: .
+          platforms: linux/amd64
+          push: true
+          build-args: |
+            AMADEUS_BASE_PATH=/amadeus/
+          tags: ${{ steps.meta.outputs.tags }}
+          labels: ${{ steps.meta.outputs.labels }}
+          cache-from: type=gha,scope=realamadeus-web
+          cache-to: type=gha,mode=max,scope=realamadeus-web
+
+  publish:
+    name: Publish release
+    needs: [prepare, desktop, web, docker]
+    runs-on: ubuntu-24.04
+    permissions:
+      contents: write
+      packages: write
+    steps:
+      - name: Download the release assets
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          mkdir -p "$RUNNER_TEMP/assets"
+          gh release download "$RELEASE_TAG" --repo "$GITHUB_REPOSITORY" --dir "$RUNNER_TEMP/assets" --clobber
+          ls -l "$RUNNER_TEMP/assets"
+
+      # Every desktop job rewrites latest.json (download, merge its platforms, re-upload), so two
+      # jobs finishing at the same moment can drop each other's entry, which would silently stop
+      # auto-updates for that platform. Never publish an incomplete latest.json.
+      - name: Check latest.json (auto-update)
+        env:
+          DESKTOP_MATRIX: ${{ needs.prepare.outputs.desktop_matrix }}
+        run: |
+          json="$RUNNER_TEMP/assets/latest.json"
+          shopt -s nullglob
+          sigs=("$RUNNER_TEMP/assets"/*.sig)
+          if [ ! -f "$json" ]; then
+            if [ ${#sigs[@]} -gt 0 ]; then
+              echo "::error::The release has updater signatures (.sig) but no latest.json: re-run the desktop jobs."
+              exit 1
+            fi
+            echo "No latest.json: this release was built without the auto-updater."
+            exit 0
+          fi
+          if ! jq -e '.platforms | type == "object"' "$json" > /dev/null; then
+            echo "::error::latest.json has no platforms object."
+            cat "$json"
+            exit 1
+          fi
+          keys="$(jq -r '.include[].updater_keys' <<<"$DESKTOP_MATRIX")"
+          missing=()
+          for key in $keys; do
+            jq -e --arg k "$key" \
+              '.platforms[$k] | (.url | type == "string") and (.signature | type == "string")' \
+              "$json" > /dev/null || missing+=("$key")
+          done
+          if [ ${#missing[@]} -gt 0 ]; then
+            echo "::error::latest.json has no entry for ${missing[*]} (two desktop jobs probably rewrote it at the same moment). Re-run the desktop job of that platform: it uploads its files and its latest.json entry again, and this job runs again after it."
+            jq '.platforms | keys' "$json"
+            exit 1
+          fi
+          echo "latest.json platforms: $(jq -r '.platforms | keys | join(", ")' "$json")"
+
+      - name: SHA256SUMS.txt for every asset
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          dir="$RUNNER_TEMP/assets"
+          rm -f "$dir/SHA256SUMS.txt" "$dir/latest.json" "$dir"/*.sha256
+          (cd "$dir" && sha256sum -- *) > "$RUNNER_TEMP/SHA256SUMS.txt"
+          cat "$RUNNER_TEMP/SHA256SUMS.txt"
+          gh release upload "$RELEASE_TAG" "$RUNNER_TEMP/SHA256SUMS.txt" --repo "$GITHUB_REPOSITORY" --clobber
+
+      # GitHub's "latest" release (which serves the auto-update endpoint
+      # .../releases/latest/download/latest.json) and the :latest image follow the newest stable
+      # version only, so re-running this workflow for an older tag never moves them back.
+      - name: Is this the newest stable release?
+        id: latest
+        env:
+          GH_TOKEN: ${{ github.token }}
+          PRERELEASE: ${{ needs.prepare.outputs.prerelease }}
+        run: |
+          latest=false
+          if [ "$PRERELEASE" != "true" ]; then
+            published="$(gh api --paginate "repos/$GITHUB_REPOSITORY/releases?per_page=100" \
+              --jq '.[] | select(.draft == false and .prerelease == false) | .tag_name')"
+            newest="$(printf '%s\n' "$published" "$RELEASE_TAG" \
+              | grep -E '^v[0-9]+\.[0-9]+\.[0-9]+$' | sort -V | tail -n 1)"
+            if [ "$newest" = "$RELEASE_TAG" ]; then
+              latest=true
+            else
+              echo "::notice::$newest is newer than $RELEASE_TAG: the latest release and the :latest image stay on $newest."
+            fi
+          fi
+          echo "latest=$latest" | tee -a "$GITHUB_OUTPUT"
+
+      - name: Publish
+        if: ${{ !inputs.draft }}
+        env:
+          GH_TOKEN: ${{ github.token }}
+          LATEST: ${{ steps.latest.outputs.latest }}
+        run: |
+          gh release edit "$RELEASE_TAG" --repo "$GITHUB_REPOSITORY" --draft=false --latest="$LATEST"
+          echo "Published https://github.com/$GITHUB_REPOSITORY/releases/tag/$RELEASE_TAG" >> "$GITHUB_STEP_SUMMARY"
+
+      # `draft` only skips publishing: it cannot turn an already published release back into a draft.
+      - name: Keep the draft
+        if: ${{ inputs.draft }}
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          is_draft="$(gh release view "$RELEASE_TAG" --repo "$GITHUB_REPOSITORY" --json isDraft --jq .isDraft)"
+          if [ "$is_draft" = "true" ]; then
+            echo "Draft kept (publish it manually): https://github.com/$GITHUB_REPOSITORY/releases" >> "$GITHUB_STEP_SUMMARY"
+          else
+            echo "::warning::$RELEASE_TAG was already published; 'draft' does not unpublish it. This run replaced its assets and SHA256SUMS.txt."
+            echo "$RELEASE_TAG was already published ('draft' does not unpublish it); this run replaced its assets: https://github.com/$GITHUB_REPOSITORY/releases/tag/$RELEASE_TAG" >> "$GITHUB_STEP_SUMMARY"
+          fi
+
+      # The docker job pushed :<version>; :latest moves only now that the release is public.
+      - uses: docker/login-action@v4
+        if: ${{ !inputs.draft && steps.latest.outputs.latest == 'true' }}
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - uses: docker/setup-buildx-action@v4
+        if: ${{ !inputs.draft && steps.latest.outputs.latest == 'true' }}
+
+      - name: Tag the Docker image as latest
+        if: ${{ !inputs.draft && steps.latest.outputs.latest == 'true' }}
+        env:
+          VERSION: ${{ needs.prepare.outputs.version }}
+        run: |
+          image="ghcr.io/${GITHUB_REPOSITORY_OWNER,,}/${IMAGE_NAME}"
+          docker buildx imagetools create --tag "$image:latest" "$image:$VERSION"
+          docker buildx imagetools inspect "$image:latest"
+          echo "Docker: $image:latest -> $VERSION" >> "$GITHUB_STEP_SUMMARY"
