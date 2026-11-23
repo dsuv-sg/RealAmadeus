@@ -349,6 +349,13 @@ pub fn download_guide(version: &Version) -> String {
     let linux = Target::parse("x86_64-unknown-linux-gnu").expect("static triple");
     let name = |t: &Target, b: Bundle| platform::bundle_asset_name(&v, t, b, platform::main_ext(b));
     let appimage = name(&linux, Bundle::AppImage);
+    let arm = Target::parse("aarch64-unknown-linux-gnu").expect("static triple");
+    let appimage_arm = name(&arm, Bundle::AppImage);
+    let web_arm = format!(
+        "{}.{}",
+        platform::web_package_name(&v, &arm),
+        arm.archive_ext()
+    );
     let web = format!(
         "{}.{}",
         platform::web_package_name(&v, &linux),
@@ -388,9 +395,26 @@ pub fn download_guide(version: &Version) -> String {
         "| Web (セルフホスト / self-hosting) | {} | `docker pull ghcr.io/{owner}/realamadeus-web:{v}` |\n",
         link(&web),
     ));
+    // Linux arm64 (Raspberry Pi 4/5, Ampere, Apple Silicon VMs, ...). The Docker image is amd64
+    // only, so the ARM self-host build is the archive.
+    s.push_str(&format!(
+        "| Linux (ARM64) | {} | AppImage: `chmod +x {appimage_arm} && ./{appimage_arm}` |\n",
+        link(&appimage_arm),
+    ));
+    s.push_str(&format!(
+        "| Debian / Ubuntu (ARM64) | {} | `sudo apt install ./<file>.deb` |\n",
+        link(&name(&arm, Bundle::Deb)),
+    ));
+    s.push_str(&format!(
+        "| Fedora / openSUSE (ARM64) | {} | `sudo dnf install ./<file>.rpm` |\n",
+        link(&name(&arm, Bundle::Rpm)),
+    ));
+    s.push_str(&format!(
+        "| Web ARM64 (セルフホスト / self-hosting) | {} | `tar xzf <file>.tar.gz` → `README-web.txt` |\n",
+        link(&web_arm),
+    ));
     s.push_str(&format!(
         "\n- ブラウザ版 / Browser version: {WEB_URL}\n\
-         - ARM64 (Linux) 版がある場合は下の Assets に含まれます / ARM64 Linux builds, when built, are listed under Assets.\n\
          - チェックサム / Checksums: `SHA256SUMS.txt`\n\
          - Windows: SmartScreen が表示されたら「詳細情報」→「実行」/ If SmartScreen appears, choose \"More info\" → \"Run anyway\".\n\
          - macOS: 初回は Finder で右クリック →「開く」/ First launch: right-click the app in Finder → \"Open\".\n\
@@ -526,6 +550,10 @@ mod tests {
             "RealAmadeus_V2.0_Linux_amd64.deb",
             "RealAmadeus_V2.0_Linux_x86_64.rpm",
             "RealAmadeus_V2.0_Web_Linux-x64.tar.gz",
+            "RealAmadeus_V2.0_Linux_aarch64.AppImage",
+            "RealAmadeus_V2.0_Linux_arm64.deb",
+            "RealAmadeus_V2.0_Linux_aarch64.rpm",
+            "RealAmadeus_V2.0_Web_Linux-arm64.tar.gz",
             "/releases/download/RealAmadeusV2.0/",
         ] {
             assert!(guide.contains(needle), "missing {needle}");
