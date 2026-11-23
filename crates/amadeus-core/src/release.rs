@@ -2,7 +2,7 @@
 //! (`amadeus-ui`) and the release tooling so that links and uploaded file names cannot drift.
 //!
 //! * Repository: [`REPO_SLUG`] (`dsuv-sg/RealAmadeus`, the workspace `repository`).
-//! * Tag: `v<semver>` ([`tag_for`], e.g. `v2.0.0`).
+//! * Tag: `RealAmadeus<display>` ([`tag_for`], e.g. `RealAmadeusV2.0`, like V1's `RealAmadeusV1.4`).
 //! * Assets: `RealAmadeus_V<display>_<Platform>_<arch><suffix>` ([`AssetSpec::file_name`]).
 //!   `<arch>` keeps each package format's own convention, exactly like `xtask`
 //!   (`xtask/src/platform.rs`) and tauri-action's `releaseAssetNamePattern`: `x64` for Windows,
@@ -25,10 +25,10 @@ pub const CHECKSUMS_FILE: &str = "SHA256SUMS.txt";
 /// The hosted web version.
 pub const WEB_URL: &str = "https://dsuv.elvelt.com/amadeus";
 
-/// Git tag of a version: `v2.0.0`.
+/// Git tag of a version: `RealAmadeusV2.0` (`RealAmadeusV2.0.1` for a patch release).
 #[must_use]
 pub fn tag_for(version: &str) -> String {
-    format!("v{version}")
+    format!("{PRODUCT_NAME}{}", format_display_version(version))
 }
 
 /// Common file-name prefix of a version's assets: `RealAmadeus_V2.0`.
@@ -46,7 +46,7 @@ pub fn download_url(version: &str, file: &str) -> String {
     )
 }
 
-/// Release page of `version` (`…/releases/tag/v2.0.0`).
+/// Release page of `version` (`…/releases/tag/RealAmadeusV2.0`).
 #[must_use]
 pub fn release_page_url(version: &str) -> String {
     format!("{RELEASES_PAGE}/tag/{}", tag_for(version))
@@ -323,18 +323,19 @@ mod tests {
 
     #[test]
     fn urls_use_the_v_tag() {
-        assert_eq!(tag_for("2.0.0"), "v2.0.0");
+        assert_eq!(tag_for("2.0.0"), "RealAmadeusV2.0");
+        assert_eq!(tag_for("2.0.1"), "RealAmadeusV2.0.1");
         assert_eq!(
             asset(AssetKind::Nsis).url("2.0.0"),
-            "https://github.com/dsuv-sg/RealAmadeus/releases/download/v2.0.0/RealAmadeus_V2.0_Windows_x64-setup.exe"
+            "https://github.com/dsuv-sg/RealAmadeus/releases/download/RealAmadeusV2.0/RealAmadeus_V2.0_Windows_x64-setup.exe"
         );
         assert_eq!(
             checksums_url("2.0.1"),
-            "https://github.com/dsuv-sg/RealAmadeus/releases/download/v2.0.1/SHA256SUMS.txt"
+            "https://github.com/dsuv-sg/RealAmadeus/releases/download/RealAmadeusV2.0.1/SHA256SUMS.txt"
         );
         assert_eq!(
             release_page_url("2.0.0"),
-            "https://github.com/dsuv-sg/RealAmadeus/releases/tag/v2.0.0"
+            "https://github.com/dsuv-sg/RealAmadeus/releases/tag/RealAmadeusV2.0"
         );
         assert!(REPO_URL.ends_with(REPO_SLUG));
         assert!(RELEASES_PAGE.starts_with(REPO_URL));

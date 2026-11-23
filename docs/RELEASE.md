@@ -14,7 +14,7 @@ RealAmadeus V2（Rust 版）を Windows / macOS / Linux / Web 向けにリリー
 | Windows x64 | `RealAmadeus_V2.0.0R_Windows_x64-setup.exe`（NSIS）、`RealAmadeus_V2.0.0R_Windows_x64.msi` |
 | macOS（Apple Silicon + Intel） | `RealAmadeus_V2.0.0R_macOS_universal.dmg`、`RealAmadeus_V2.0.0R_macOS_universal.app.tar.gz` |
 | Linux x64 | `RealAmadeus_V2.0.0R_Linux_amd64.AppImage`、`RealAmadeus_V2.0.0R_Linux_amd64.deb`、`RealAmadeus_V2.0.0R_Linux_x86_64.rpm` |
-| Linux arm64（任意） | `..._Linux_aarch64.AppImage`、`..._Linux_arm64.deb`、`..._Linux_aarch64.rpm` |
+| Linux arm64 | `..._Linux_aarch64.AppImage`、`..._Linux_arm64.deb`、`..._Linux_aarch64.rpm` |
 | Web | `RealAmadeus_V2.0.0R_Web_Linux-x64.tar.gz`（+ `.sha256`）、`ghcr.io/dsuv-sg/realamadeus-web:2.0.0` / `:latest` |
 | 共通 | `SHA256SUMS.txt`、（自動更新を有効にした場合）`latest.json` と各 `.sig` |
 
@@ -70,7 +70,6 @@ Settings → Secrets and variables → Actions で登録します。
 | Secret | `WINDOWS_CERTIFICATE` | Windows Authenticode 署名 | コード署名証明書の `.pfx` を base64 化（PowerShell: `[Convert]::ToBase64String([IO.File]::ReadAllBytes("cert.pfx"))`） |
 | Secret | `WINDOWS_CERTIFICATE_PASSWORD` | `.pfx` のパスワード | 証明書の発行時 |
 | Variable | `WINDOWS_TIMESTAMP_URL` | タイムスタンプサーバー | 既定 `http://timestamp.digicert.com`（証明書の発行元のものがあればそれ） |
-| Variable | `RELEASE_LINUX_ARM64` | `true` で Linux arm64 版（デスクトップ + Web）も作る | GitHub の arm64 ランナー（`ubuntu-22.04-arm`）は public リポジトリなら無料 |
 
 - `GITHUB_TOKEN` は自動で用意されます（Release の作成とアセットのアップロード、ghcr.io への push に使用）。
 - **サーバーの秘密情報（`AI_STUDIO_API_KEY`、Vertex のサービスアカウント JSON）は GitHub に登録しません。**
@@ -130,7 +129,7 @@ git push --follow-tags
   なければひな形を入れる（ひな形のままだと `release-notes` が警告を出すので、タグ前に書き換える）
 - `--commit`: この 3 ファイルのうち HEAD と差分があるものだけをコミット（`Release RealAmadeus V2.0.1R`）。
   手で書いたリリースノートや、以前 `--commit` なしで実行した bump の変更も含まれます
-- `--tag`: 注釈付きタグ `v2.0.1` を作成（`git push --follow-tags` で送られる）。
+- `--tag`: 注釈付きタグ `RealAmadeusV2.0.1` を作成（`2.0.0` は `RealAmadeusV2.0`）（`git push --follow-tags` で送られる）。
   次の場合はファイルに触れる前にエラーで止まります: リリースノートが空（ひな形のまま）、
   `--commit` なしで 3 ファイルに未コミットの変更がある、タグがすでにある、
   ワークスペースがまだ Git にコミットされていない
@@ -156,7 +155,7 @@ GitHub Actions（Actions → Release）では:
 - **プレリリース**: `cargo xtask bump 2.1.0-rc.1 --commit --tag`。Release は pre-release 扱い、Docker の `:latest` と自動更新の対象外。
   MSI（WiX）のバージョンは数字のみのため、`rc.1` のように数字以外を含むプレリリースでは Windows は
   NSIS インストーラー（`-setup.exe`）だけになります（`2.1.0-1` 形式なら MSI も作られます。ローカルの `dist desktop` も同じ動作）。
-- **やり直し**: Actions → Release → Run workflow で既存のタグ（例 `v2.0.1`）を指定。アセットは上書きされます。
+- **やり直し**: Actions → Release → Run workflow で既存のタグ（例 `RealAmadeusV2.0`）を指定。アセットは上書きされます。
   `draft` にチェックすると公開しません（新しいリリースはドラフトのまま。すでに公開済みのリリースは
   公開のままで、ドラフトには戻りません）。古いタグをやり直しても「Latest」と `:latest` は最新版のままです。
 - **リリースせずにインストーラーだけ試す**: Actions → CI → Run workflow で `bundle` にチェック。
@@ -276,6 +275,7 @@ sudo apt install libwebkit2gtk-4.1-dev libappindicator3-dev librsvg2-dev patchel
 - **`strip: ... unknown type [0x13] section .relr.dyn`**: 新しいディストリビューションで linuxdeploy の `strip` が古い →
   `cargo xtask dist desktop --no-strip`（`NO_STRIP=true`）。
 - **画面が真っ白 / 描画が乱れる（一部の GPU ドライバ）**: `WEBKIT_DISABLE_DMABUF_RENDERER=1` を付けて起動。
+- **GPU の選択**: デスクトップ版は内蔵 GPU と外付け（NVIDIA / AMD / Intel Arc）の両方がある環境で外付け GPU を使います（Windows: WebView2 の `--force_high_performance_gpu`、Linux: PRIME オフロード + WebKit のハードウェア描画）。描画が乱れる場合は `AMADEUS_GPU=off` を付けて起動すると無効にできます。
 - **`webkit2gtk-4.1` が見つからない**: §3 の依存パッケージを入れる（Ubuntu 22.04 以降 / Debian 12 以降）。
 
 ### デスクトップ版（全 OS 共通の既知の制限）
@@ -337,7 +337,7 @@ sudo apt install libwebkit2gtk-4.1-dev libappindicator3-dev librsvg2-dev patchel
 ### リリースワークフロー
 
 - **`Tag vX does not match the workspace version`**: タグは `cargo xtask bump <ver> --commit --tag` で作る。
-  間違えたタグは `git tag -d v2.0.1 && git push origin :refs/tags/v2.0.1` で消してやり直す。
+  間違えたタグは `git tag -d RealAmadeusV2.0.1 && git push origin :refs/tags/RealAmadeusV2.0.1` で消してやり直す。
 - **ghcr.io への push が `denied`**: パッケージがすでに別の設定で存在する場合、Package settings →
   Manage Actions access でこのリポジトリに Write 権限を与える。
 - **`TAURI_SIGNING_PRIVATE_KEY is set but the updater public key is missing`**: §1.3 の手順 3。
@@ -373,7 +373,7 @@ GitHub Actions はリポジトリ直下の `.github/workflows/` しか読み込�
 3. `run:` 以外のパスを直す: `Swatinem/rust-cache` に `workspaces: RealAmadeusRust -> target`、
    `tauri-apps/tauri-action` に `projectPath: RealAmadeusRust`、`docker/build-push-action` の `context: RealAmadeusRust`、
    `actions/upload-artifact` の `path: RealAmadeusRust/release/`、CI の `working-directory: apps/web` を `RealAmadeusRust/apps/web` に
-4. タグ `v2.*` が他のプロジェクトのタグと衝突しないか確認（必要なら `realamadeus-v2.*` などに変え、
+4. タグ `RealAmadeusV2.*` が他のプロジェクトのタグと衝突しないか確認（必要なら別の接頭辞に変え、
    prepare ジョブのタグ検証も合わせる）
 
 ---
@@ -385,13 +385,13 @@ GitHub Actions はリポジトリ直下の `.github/workflows/` しか読み込�
   Assets are named `RealAmadeus_V<version>R_<Platform>_<arch>...` (`R` = Rust edition).
 - **Release** = push a tag: `cargo xtask bump 2.0.1 --commit --tag` (edits `Cargo.toml`, refreshes
   `Cargo.lock`, adds the `CHANGELOG.md` section — moving `[Unreleased]` notes into it — commits those
-  three files and creates the annotated tag `v2.0.1`; it never pushes), then `git push --follow-tags`.
+  three files and creates the annotated tag `RealAmadeusV2.0.1`; it never pushes), then `git push --follow-tags`.
   `--tag` refuses, before changing anything, when the release notes would be empty (template only),
   when the release files have uncommitted changes and `--commit` is missing, or when the workspace is
   not committed to Git yet.
   `.github/workflows/release.yml` checks that the tag matches the version, creates a draft release whose
   body is `cargo xtask release-notes <ver> --download-guide`, builds Windows (NSIS + MSI), macOS
-  (universal dmg), Linux (AppImage/deb/rpm, plus arm64 when `RELEASE_LINUX_ARM64=true`) with
+  (universal dmg), Linux (AppImage/deb/rpm, plus arm64, always) with
   tauri-action, the web tarball with `cargo xtask dist web`, and pushes `ghcr.io/<owner>/realamadeus-web:<ver>`.
   Only if every job succeeded does `publish` check that `latest.json` (when auto-update is on) lists
   every platform, upload `SHA256SUMS.txt` and publish the release; GitHub's "Latest" flag and the

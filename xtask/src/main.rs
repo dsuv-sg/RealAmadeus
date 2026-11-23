@@ -64,7 +64,7 @@ enum Command {
 #[derive(Args)]
 #[group(multiple = false)]
 struct VersionArgs {
-    /// Print the Git tag instead (v2.0.0)
+    /// Print the Git tag instead (RealAmadeusV2.0)
     #[arg(long)]
     tag: bool,
     /// Print the product label instead (V2.0)
@@ -82,7 +82,7 @@ struct BumpArgs {
     /// Commit Cargo.toml, Cargo.lock and CHANGELOG.md
     #[arg(long)]
     commit: bool,
-    /// Create the annotated tag `v<version>` (push it yourself with `git push --follow-tags`)
+    /// Create the annotated tag `RealAmadeus<label>` (e.g. `RealAmadeusV2.0`) (push it yourself with `git push --follow-tags`)
     #[arg(long)]
     tag: bool,
     /// Release date for the CHANGELOG heading (default: today)

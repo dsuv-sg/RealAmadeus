@@ -94,8 +94,12 @@ pub fn create_main_window(app: &AppHandle) -> anyhow::Result<WebviewWindow> {
 
     let nav_app = app.clone();
     let popup_app = app.clone();
-    let window = WebviewWindowBuilder::from_config(app, &config)
-        .context("invalid main window configuration")?
+    let builder = WebviewWindowBuilder::from_config(app, &config)
+        .context("invalid main window configuration")?;
+    // WebView2: render on the discrete GPU (see `gpu`).
+    #[cfg(windows)]
+    let builder = builder.additional_browser_args(&crate::gpu::windows_browser_args());
+    let window = builder
         .on_navigation(move |url| {
             if is_app_url(url, &app_origin, dev_url.as_ref()) {
                 return true;
@@ -110,6 +114,9 @@ pub fn create_main_window(app: &AppHandle) -> anyhow::Result<WebviewWindow> {
         })
         .build()
         .context("cannot create the main window")?;
+
+    #[cfg(any(target_os = "linux", target_os = "freebsd"))]
+    crate::gpu::enable_webkit_acceleration(&window);
 
     // tauri-plugin-window-state restored the saved geometry while the window was built.
     let fullscreen = install_window_events(&window);

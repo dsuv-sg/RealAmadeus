@@ -6,7 +6,7 @@ binding answers for V2. When a spec disagrees with this file, this file wins.
 | # | Topic | Decision |
 |---|-------|----------|
 | D1 | Web base path | `/amadeus` (Trunk `public_url = "/amadeus/"`). Every page is a SPA route under it: `/amadeus`, `/amadeus/app`, `/amadeus/docs/**`, `/amadeus/download`, `/amadeus/changelog`. API stays at V1 URLs `{base}/app/api/...`. Static files are **base-relative**: V1 `/resources/...` → `{base}/resources/...`, V1 root files (`/amadeus_logo.png`, `/*_STEP*.png`, …) → `{base}/static/...`. Desktop uses base `/`. (server-aux spec proposed `/amadeus/app` + origin-root resources — rejected: one reverse-proxy rule `/amadeus/*` must be enough.) |
-| D2 | Release naming | Git tag `v<semver>` (e.g. `v2.0.0`); assets `RealAmadeus_V<semver>R_<Platform>_<arch>.<ext>` (`R` = Rust edition; V1 used `U`/`Q`). |
+| D2 | Release naming | Git tag `RealAmadeus<label>` (e.g. `RealAmadeusV2.0`, `RealAmadeusV2.0.1`; V1 style); assets `RealAmadeus_V<semver>R_<Platform>_<arch>.<ext>` (`R` = Rust edition; V1 used `U`/`Q`). |
 | D3 | Visible version strings | V2 shows its own version everywhere V1 showed `v1.4N…` (status panel, credits, landing): derive from `amadeus_core::version` (`V2.0.0R`). Change logs keep all V1 entries and gain a V2 entry on top. |
 | D4 | Live2D shaders | Embedded with `include_str!` (no runtime fetch). Compile only the programs the model needs (normal/masked/inverted-mask × premultiplied); 5.3 blend/offscreen paths are compiled lazily only if a model uses them. A shader compile failure must not make the model invisible forever: log once and fall back. |
 | D5 | Live2D frame loop errors | Catch/contain per-frame errors (log once per distinct message), keep the loop running. |

@@ -2,10 +2,11 @@
 #
 #   cargo xtask bump 2.0.1 --commit --tag && git push --follow-tags
 #
-# A pushed tag v2.x.y (or a manual run for an existing tag) creates a draft GitHub release
+# A pushed tag RealAmadeusV2.x (RealAmadeusV2.x.y for a patch release; or a manual run for an
+# existing tag) creates a draft GitHub release
 # "RealAmadeus V2.x.y" (e.g. "RealAmadeus V2.0") with the CHANGELOG section as its body, then builds in parallel:
 #   desktop  Windows (NSIS + MSI), macOS (universal .dmg), Linux (AppImage, .deb, .rpm)
-#            [+ Linux arm64 when the repository variable RELEASE_LINUX_ARM64 is "true"]
+#            + Linux arm64 (AppImage, .deb, .rpm on the free ubuntu-22.04-arm runner)
 #   web      RealAmadeus_<label>_Web_Linux-x64.tar.gz (+ .sha256)
 #   docker   ghcr.io/<owner>/realamadeus-web:<ver>
 # and finally publishes the release (unless a draft was requested). Only then, and only for the
@@ -20,8 +21,7 @@
 #   APPLE_CERTIFICATE, APPLE_CERTIFICATE_PASSWORD, APPLE_SIGNING_IDENTITY,
 #   APPLE_ID, APPLE_PASSWORD, APPLE_TEAM_ID                         macOS signing/notarization
 #   WINDOWS_CERTIFICATE, WINDOWS_CERTIFICATE_PASSWORD               Windows Authenticode
-# Optional repository variables: TAURI_UPDATER_PUBKEY, RELEASE_LINUX_ARM64,
-# WINDOWS_TIMESTAMP_URL. See docs/RELEASE.md.
+# Optional repository variables: TAURI_UPDATER_PUBKEY, WINDOWS_TIMESTAMP_URL. See docs/RELEASE.md.
 #
 # NOTE: assumes RealAmadeusRust/ is the repository root (see the note in ci.yml otherwise).
 
@@ -29,11 +29,11 @@ name: Release
 
 on:
   push:
-    tags: ["v2.*"]
+    tags: ["RealAmadeusV2.*"]
   workflow_dispatch:
     inputs:
       tag:
-        description: "Existing tag to build and release, e.g. v2.0.1"
+        description: "Existing tag to build and release, e.g. RealAmadeusV2.0 or RealAmadeusV2.0.1"
         required: true
         type: string
       draft:
@@ -77,8 +77,8 @@ jobs:
     steps:
       - name: Validate the tag
         run: |
-          if [[ ! "$RELEASE_TAG" =~ ^v[0-9]+\.[0-9]+\.[0-9]+(-[0-9A-Za-z.-]+)?$ ]]; then
-            echo "::error::'$RELEASE_TAG' is not a release tag such as v2.0.1 or v2.1.0-rc.1"
+          if [[ ! "$RELEASE_TAG" =~ ^RealAmadeusV[0-9]+\.[0-9]+(\.[0-9]+)?(-[0-9A-Za-z.-]+)?$ ]]; then
+            echo "::error::'$RELEASE_TAG' is not a release tag such as RealAmadeusV2.0, RealAmadeusV2.0.1 or RealAmadeusV2.1.0-rc.1"
             exit 1
           fi
 
@@ -98,8 +98,9 @@ jobs:
           meta="$(cargo xtask version --json)"
           echo "$meta"
           version="$(jq -r .version <<<"$meta")"
-          if [ "v$version" != "$RELEASE_TAG" ]; then
-            echo "::error::Tag $RELEASE_TAG does not match the workspace version $version in Cargo.toml. Create tags with 'cargo xtask bump <version> --commit --tag'."
+          expected_tag="$(jq -r .tag <<<"$meta")"
+          if [ "$expected_tag" != "$RELEASE_TAG" ]; then
+            echo "::error::Tag $RELEASE_TAG does not match the workspace version $version in Cargo.toml (expected tag $expected_tag). Create tags with 'cargo xtask bump <version> --commit --tag'."
             exit 1
           fi
           {
@@ -141,7 +142,6 @@ jobs:
       - name: Build matrices
         id: matrices
         env:
-          LINUX_ARM64: ${{ vars.RELEASE_LINUX_ARM64 }}
           MSI_COMPATIBLE: ${{ steps.meta.outputs.msi_compatible }}
         run: |
           windows_bundles=nsis,msi
@@ -171,12 +171,10 @@ jobs:
           ]'
           web='[{"id": "linux-x64", "name": "Linux x64", "runner": "ubuntu-22.04"}]'
           # GitHub-hosted arm64 Linux runners (free for public repositories).
-          if [ "$LINUX_ARM64" = "true" ]; then
-            desktop="$(jq '. + [{"id": "linux-arm64", "name": "Linux arm64", "runner": "ubuntu-22.04-arm",
-              "platform": "Linux", "targets": "wasm32-unknown-unknown", "args": "--bundles appimage,deb,rpm",
-              "updater_keys": "linux-aarch64 linux-aarch64-appimage linux-aarch64-deb linux-aarch64-rpm"}]' <<<"$desktop")"
-            web="$(jq '. + [{"id": "linux-arm64", "name": "Linux arm64", "runner": "ubuntu-22.04-arm"}]' <<<"$web")"
-          fi
+          desktop="$(jq '. + [{"id": "linux-arm64", "name": "Linux arm64", "runner": "ubuntu-22.04-arm",
+            "platform": "Linux", "targets": "wasm32-unknown-unknown", "args": "--bundles appimage,deb,rpm",
+            "updater_keys": "linux-aarch64 linux-aarch64-appimage linux-aarch64-deb linux-aarch64-rpm"}]' <<<"$desktop")"
+          web="$(jq '. + [{"id": "linux-arm64", "name": "Linux arm64", "runner": "ubuntu-22.04-arm"}]' <<<"$web")"
           echo "desktop=$(jq -c '{include: .}' <<<"$desktop")" >> "$GITHUB_OUTPUT"
           echo "web=$(jq -c '{include: .}' <<<"$web")" >> "$GITHUB_OUTPUT"
 
@@ -214,6 +212,16 @@ jobs:
       - uses: taiki-e/install-action@v2
         with:
           tool: trunk@${{ env.TRUNK_VERSION }}
+
+      # Trunk downloads a prebuilt wasm-bindgen, which for aarch64 needs glibc 2.38 (the arm64
+      # runner has 2.35). Build the exact version from Cargo.lock here; Trunk uses a matching one
+      # found in PATH. Only a build tool: the shipped binaries still target glibc 2.35.
+      - name: Build wasm-bindgen (arm64)
+        if: runner.arch == 'ARM64'
+        run: |
+          version="$(grep -A1 '^name = "wasm-bindgen"$' Cargo.lock | sed -n 's/^version = "\(.*\)"/\1/p')"
+          echo "wasm-bindgen $version"
+          cargo install wasm-bindgen-cli --version "$version" --locked
 
       - name: Install the Tauri CLI
         run: npm install --global "@tauri-apps/cli@${TAURI_CLI_VERSION}"
@@ -371,6 +379,16 @@ jobs:
         with:
           tool: trunk@${{ env.TRUNK_VERSION }}
 
+      # Trunk downloads a prebuilt wasm-bindgen, which for aarch64 needs glibc 2.38 (the arm64
+      # runner has 2.35). Build the exact version from Cargo.lock here; Trunk uses a matching one
+      # found in PATH. Only a build tool: the shipped binaries still target glibc 2.35.
+      - name: Build wasm-bindgen (arm64)
+        if: runner.arch == 'ARM64'
+        run: |
+          version="$(grep -A1 '^name = "wasm-bindgen"$' Cargo.lock | sed -n 's/^version = "\(.*\)"/\1/p')"
+          echo "wasm-bindgen $version"
+          cargo install wasm-bindgen-cli --version "$version" --locked
+
       # Built on Ubuntu 22.04 (glibc 2.35) so the binary runs on Debian 12, Ubuntu 22.04+ and newer.
       - name: cargo xtask dist web
         run: cargo xtask dist web
@@ -513,7 +531,7 @@ jobs:
             published="$(gh api --paginate "repos/$GITHUB_REPOSITORY/releases?per_page=100" \
               --jq '.[] | select(.draft == false and .prerelease == false) | .tag_name')"
             newest="$(printf '%s\n' "$published" "$RELEASE_TAG" \
-              | grep -E '^v[0-9]+\.[0-9]+\.[0-9]+$' | sort -V | tail -n 1)"
+              | grep -E '^RealAmadeusV[0-9]+\.[0-9]+(\.[0-9]+)?$' | sort -V | tail -n 1)"
             if [ "$newest" = "$RELEASE_TAG" ]; then
               latest=true
             else

@@ -91,6 +91,7 @@
 
 mod calls;
 mod config;
+mod gpu;
 mod ipc;
 mod logging;
 mod platform;
@@ -112,6 +113,9 @@ use tracing as _;
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
     logging::install_panic_hook();
+    // Before any thread or webview exists: ask for the discrete GPU (see `gpu`).
+    #[cfg(any(target_os = "linux", target_os = "freebsd"))]
+    gpu::prepare_linux();
 
     let built = tauri::Builder::default()
         // Must be the first plugin: a second launch hands over to the running instance and exits.

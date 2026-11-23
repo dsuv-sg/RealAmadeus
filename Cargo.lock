@@ -93,6 +93,7 @@ dependencies = [
  "tauri-plugin-window-state",
  "tokio",
  "tracing",
+ "webkit2gtk",
 ]
 
 [[package]]

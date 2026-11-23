@@ -27,9 +27,10 @@ impl Version {
         !self.pre.is_empty()
     }
 
-    /// Git tag of this version: `v2.0.0`.
+    /// Git tag of this version: `RealAmadeusV2.0` (V1 style: `RealAmadeusV1.4`), or
+    /// `RealAmadeusV2.0.1` for a patch release.
     pub fn tag(&self) -> String {
-        format!("v{self}")
+        format!("RealAmadeus{}", self.label())
     }
 
     /// Product label: `V2.0` (drops `.0` patch on release versions).
@@ -119,7 +120,7 @@ impl fmt::Display for Version {
 impl FromStr for Version {
     type Err = anyhow::Error;
 
-    /// Accepts `2.0.1`, `v2.0.1`, `V2.0.1`, legacy `V2.0.1R`, and SemVer pre-release/build suffixes.
+    /// Accepts `2.0.1`, the tag form `RealAmadeusV2.0` / `RealAmadeusV2.0.1`, `v2.0.1`, `V2.0.1`, legacy `V2.0.1R`, and SemVer pre-release/build suffixes.
     fn from_str(input: &str) -> Result<Self> {
         let err = || {
             anyhow!(
@@ -127,6 +128,9 @@ impl FromStr for Version {
             )
         };
         let mut s = input.trim();
+        // Tag form `RealAmadeusV2.0` (a missing patch is `.0`, see `label`).
+        let from_tag = s.starts_with("RealAmadeus");
+        s = s.strip_prefix("RealAmadeus").unwrap_or(s);
         s = s
             .strip_prefix('v')
             .or_else(|| s.strip_prefix('V'))
@@ -147,7 +151,10 @@ impl FromStr for Version {
             None => (s, None),
         };
 
-        let nums: Vec<&str> = core.split('.').collect();
+        let mut nums: Vec<&str> = core.split('.').collect();
+        if from_tag && nums.len() == 2 {
+            nums.push("0");
+        }
         if nums.len() != 3 {
             return Err(err());
         }
@@ -575,7 +582,12 @@ mod tests {
         assert_eq!(v("2.1.0-rc.1+build.5").to_string(), "2.1.0-rc.1+build.5");
         assert!(v("2.1.0-beta").is_prerelease());
         assert!(!v("2.1.0").is_prerelease());
-        assert_eq!(v("2.0.1").tag(), "v2.0.1");
+        assert_eq!(v("RealAmadeusV2.0").to_string(), "2.0.0");
+        assert_eq!(v("RealAmadeusV2.0.1").to_string(), "2.0.1");
+        assert_eq!(v("RealAmadeusV2.1.0-rc.1").to_string(), "2.1.0-rc.1");
+        assert_eq!(v("2.0.1").tag(), "RealAmadeusV2.0.1");
+        assert_eq!(v("2.0.0").tag(), "RealAmadeusV2.0");
+        assert_eq!(v("2.1.0-rc.1").tag(), "RealAmadeusV2.1.0-rc.1");
         assert_eq!(v("2.0.0").label(), "V2.0");
         assert_eq!(v("2.1.0").label(), "V2.1");
         assert_eq!(v("2.0.1").label(), "V2.0.1");

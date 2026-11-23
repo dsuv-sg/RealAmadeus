@@ -48,6 +48,8 @@ tauri-plugin-updater = { workspace = true, optional = true }
 # so `shell` follows GTK's window-state events. Same gtk-rs release line as Tauri's.
 [target.'cfg(any(target_os = "linux", target_os = "dragonfly", target_os = "freebsd", target_os = "netbsd", target_os = "openbsd"))'.dependencies]
 gtk = "0.18"
+# WebKitGTK hardware acceleration policy (`gpu`); the same release as Tauri's.
+webkit2gtk = { version = "2.0", features = ["v2_16"] }
 
 [features]
 default = []

@@ -348,6 +348,7 @@ pub fn download_guide(version: &Version) -> String {
     let mac = Target::parse("universal-apple-darwin").expect("static triple");
     let linux = Target::parse("x86_64-unknown-linux-gnu").expect("static triple");
     let name = |t: &Target, b: Bundle| platform::bundle_asset_name(&v, t, b, platform::main_ext(b));
+    let appimage = name(&linux, Bundle::AppImage);
     let web = format!(
         "{}.{}",
         platform::web_package_name(&v, &linux),
@@ -372,8 +373,8 @@ pub fn download_guide(version: &Version) -> String {
         link(&name(&mac, Bundle::Dmg)),
     ));
     s.push_str(&format!(
-        "| Linux (x86_64) | {} | AppImage: `chmod +x` して実行 / make executable and run |\n",
-        link(&name(&linux, Bundle::AppImage)),
+        "| Linux (x86_64) | {} | AppImage: `chmod +x {appimage} && ./{appimage}` |\n",
+        link(&appimage),
     ));
     s.push_str(&format!(
         "| Debian / Ubuntu (x86_64) | {} | `sudo apt install ./<file>.deb` |\n",
@@ -406,7 +407,7 @@ mod tests {
         s.parse().unwrap()
     }
 
-    const SAMPLE: &str = "# Changelog\n\nIntro.\n\n## [Unreleased]\n\n## [2.0.0] - 2026-11-16\n\n### Added\n\n- Rust rewrite.\n- Desktop apps.\n\n## [V1.4] - 2025-01-01\n\nOld.\n\n[Unreleased]: https://github.com/o/r/compare/v2.0.0...HEAD\n[2.0.0]: https://github.com/o/r/releases/tag/v2.0.0\n";
+    const SAMPLE: &str = "# Changelog\n\nIntro.\n\n## [Unreleased]\n\n## [2.0.0] - 2026-11-16\n\n### Added\n\n- Rust rewrite.\n- Desktop apps.\n\n## [V1.4] - 2025-01-01\n\nOld.\n\n[Unreleased]: https://github.com/o/r/compare/RealAmadeusV2.0...HEAD\n[2.0.0]: https://github.com/o/r/releases/tag/RealAmadeusV2.0\n";
 
     #[test]
     fn extracts_a_section_body() {
@@ -440,8 +441,12 @@ mod tests {
         assert!(section_body(&out, &v("2.0.1"))
             .unwrap()
             .contains(PLACEHOLDER));
-        assert!(out.contains("[Unreleased]: https://github.com/o/r/compare/v2.0.1...HEAD"));
-        assert!(out.contains("[2.0.1]: https://github.com/o/r/compare/v2.0.0...v2.0.1"));
+        assert!(
+            out.contains("[Unreleased]: https://github.com/o/r/compare/RealAmadeusV2.0.1...HEAD")
+        );
+        assert!(out.contains(
+            "[2.0.1]: https://github.com/o/r/compare/RealAmadeusV2.0...RealAmadeusV2.0.1"
+        ));
         // Idempotent.
         let (again, how) = insert_section(&out, &v("2.0.1"), "2026-12-02");
         assert_eq!(how, Ensured::Existing);
@@ -517,11 +522,11 @@ mod tests {
             "RealAmadeus_V2.0_Windows_x64-setup.exe",
             "RealAmadeus_V2.0_Windows_x64.msi",
             "RealAmadeus_V2.0_macOS_universal.dmg",
-            "RealAmadeus_V2.0_Linux_amd64.AppImage",
+            "chmod +x RealAmadeus_V2.0_Linux_amd64.AppImage && ./RealAmadeus_V2.0_Linux_amd64.AppImage",
             "RealAmadeus_V2.0_Linux_amd64.deb",
             "RealAmadeus_V2.0_Linux_x86_64.rpm",
             "RealAmadeus_V2.0_Web_Linux-x64.tar.gz",
-            "/releases/download/v2.0.0/",
+            "/releases/download/RealAmadeusV2.0/",
         ] {
             assert!(guide.contains(needle), "missing {needle}");
         }

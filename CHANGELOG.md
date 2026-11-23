@@ -121,10 +121,10 @@ RealAmadeus V2 is the first release of the complete Rust rewrite of RealAmadeusW
   the app (`/amadeus/app`) and the API (`/amadeus/app/api/…`) keep their URLs.
 - **Web サーバーのデータ / Server data files** — チャットログとリクエスト数のファイル（V1 と同じ
   `.amadeus_chat_log.jsonl` と `.amadeus_request_count`、形式も同じ）は `AMADEUS_DATA_DIR`（既定 `./data`）に
-  保存されます。V1 から切り替えるときはコピーしてください（[deploy/README.md](https://github.com/dsuv-sg/RealAmadeus/blob/v2.0.0/deploy/README.md)）。
+  保存されます。V1 から切り替えるときはコピーしてください（[deploy/README.md](https://github.com/dsuv-sg/RealAmadeus/blob/RealAmadeusV2.0/deploy/README.md)）。
   The chat log and the request counter (V1's `.amadeus_chat_log.jsonl` and `.amadeus_request_count`,
   same formats) live in `AMADEUS_DATA_DIR` (default `./data`); copy them over when switching from V1
-  (see [deploy/README.md](https://github.com/dsuv-sg/RealAmadeus/blob/v2.0.0/deploy/README.md)).
+  (see [deploy/README.md](https://github.com/dsuv-sg/RealAmadeus/blob/RealAmadeusV2.0/deploy/README.md)).
 - **Web サーバーの起動 / Server startup** — `amadeus-server` は既定で `127.0.0.1:9502` で待ち受けます
   （`AMADEUS_BIND` / `--bind`。V1 の Next.js の 9501 とは別なので、切り替えの間は並べて動かせます）。
   フロントエンドが別の公開パス用にビルドされている（`index.html` の `<base href>` が `AMADEUS_BASE_PATH` と違う）と、
@@ -319,8 +319,8 @@ The following differences from V1 in the unreleased V2 test builds are fixed as 
   設定・記憶・実績はそのまま引き継がれます。
   localStorage keys and formats are unchanged, so settings, memories and achievements carry
   over when V2 replaces V1 on the same origin.
-- V1 との意図的な違いはすべて [docs/V1_DIFFERENCES.md](https://github.com/dsuv-sg/RealAmadeus/blob/v2.0.0/docs/V1_DIFFERENCES.md) にまとめています。
-  Every intentional difference from V1 is listed in [docs/V1_DIFFERENCES.md](https://github.com/dsuv-sg/RealAmadeus/blob/v2.0.0/docs/V1_DIFFERENCES.md).
+- V1 との意図的な違いはすべて [docs/V1_DIFFERENCES.md](https://github.com/dsuv-sg/RealAmadeus/blob/RealAmadeusV2.0/docs/V1_DIFFERENCES.md) にまとめています。
+  Every intentional difference from V1 is listed in [docs/V1_DIFFERENCES.md](https://github.com/dsuv-sg/RealAmadeus/blob/RealAmadeusV2.0/docs/V1_DIFFERENCES.md).
 
 ### 既知の制限 / Known limitations
 
@@ -339,5 +339,5 @@ The following differences from V1 in the unreleased V2 test builds are fixed as 
   The download page links the files of its own build's version; it does not look up the latest
   GitHub release.
 
-[Unreleased]: https://github.com/dsuv-sg/RealAmadeus/compare/v2.0.0...HEAD
-[2.0.0]: https://github.com/dsuv-sg/RealAmadeus/releases/tag/v2.0.0
+[Unreleased]: https://github.com/dsuv-sg/RealAmadeus/compare/RealAmadeusV2.0...HEAD
+[2.0.0]: https://github.com/dsuv-sg/RealAmadeus/releases/tag/RealAmadeusV2.0
